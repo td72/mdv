@@ -1,0 +1,70 @@
+# mdv — markdown viewer (vi/vim)
+# Swift comes from the Apple toolchain (Xcode Command Line Tools); AppKit needs it, so it is not a mise tool.
+
+[env]
+MDV_APP = "build/mdv.app"
+MDV_BIN = ".build/release/mdv"
+MDV_PREFIX = "{{env.HOME}}/Applications"
+MDV_BINDIR = "{{env.HOME}}/.local/bin"
+
+[tasks.build]
+description = "Release build (swift build -c release)"
+alias = "b"
+run = "swift build -c release"
+sources = ["Package.swift", "Package.resolved", "Sources/**/*.swift"]
+outputs = [".build/release/mdv"]
+
+[tasks.app]
+description = "Assemble build/mdv.app from the release binary"
+depends = ["build"]
+run = '''
+set -euo pipefail
+rm -rf "$MDV_APP"
+mkdir -p "$MDV_APP/Contents/MacOS" "$MDV_APP/Contents/Resources"
+cp "$MDV_BIN" "$MDV_APP/Contents/MacOS/mdv"
+cp Resources/Info.plist "$MDV_APP/Contents/Info.plist"
+codesign --force --sign - "$MDV_APP"
+'''
+
+[tasks.install]
+description = "Copy mdv.app to ~/Applications and symlink the CLI into ~/.local/bin"
+depends = ["app"]
+run = '''
+set -euo pipefail
+rm -rf "$MDV_PREFIX/mdv.app"
+mkdir -p "$MDV_PREFIX" "$MDV_BINDIR"
+cp -R "$MDV_APP" "$MDV_PREFIX/mdv.app"
+ln -sf "$MDV_PREFIX/mdv.app/Contents/MacOS/mdv" "$MDV_BINDIR/mdv"
+echo "installed: $MDV_PREFIX/mdv.app  (cli: $MDV_BINDIR/mdv)"
+'''
+
+[tasks.run]
+description = "Build and open a markdown file (default: examples/sample.md)"
+depends = ["build"]
+usage = '''
+arg "[file]" help="Markdown file to open" default="examples/sample.md"
+'''
+run = '"$MDV_BIN" "${usage_file}"'
+
+[tasks.snapshot]
+description = "Render a file to a PNG (debug) — mise r snapshot [file] [-o out.png] [--dark] [--width N]"
+depends = ["build"]
+usage = '''
+arg "[file]" help="Markdown file" default="examples/sample.md"
+flag "-o --out <path>" help="Output PNG" default="build/snapshot.png"
+flag "--dark" help="Force dark appearance"
+flag "--width <pt>" help="Text view width in points"
+'''
+run = '''
+set -euo pipefail
+mkdir -p "$(dirname "${usage_out}")"
+export MDV_SNAPSHOT="${usage_out}"
+[ -n "${usage_width:-}" ] && export MDV_SNAPSHOT_WIDTH="${usage_width}"
+[ "${usage_dark:-}" = "true" ] && export MDV_DARK=1
+"$MDV_BIN" "${usage_file}"
+echo "wrote ${usage_out}"
+'''
+
+[tasks.clean]
+description = "Remove build artifacts"
+run = "rm -rf .build build"
