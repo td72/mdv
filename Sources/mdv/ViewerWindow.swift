@@ -99,6 +99,9 @@ final class ViewerWindowController: NSWindowController, NSWindowDelegate, NSText
 
     func load(preserveScroll: Bool = true) {
         let savedOrigin = scrollView.contentView.bounds.origin
+        theme = Theme.load() // re-read config on every (re)load so `r` picks up edits
+        textView.maxContentWidth = theme.maxWidth
+        textView.relayoutColumn()
         let (markdown, baseURL): (String, URL?)
         switch source {
         case .file(let url):
@@ -330,7 +333,7 @@ final class ViewerWindowController: NSWindowController, NSWindowDelegate, NSText
     }
 
     func resetZoom() {
-        theme.baseSize = Theme().baseSize
+        theme.baseSize = theme.defaultSize
         theme.save()
         load()
     }

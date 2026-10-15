@@ -24,7 +24,7 @@ final class VimTextView: NSTextView {
     weak var commands: ViewerCommands?
 
     /// Readable column: the text container never exceeds this width and is centered.
-    var maxContentWidth: CGFloat = 900
+    var maxContentWidth: CGFloat = 948
     var minInset = NSSize(width: 32, height: 28)
 
     override func setFrameSize(_ newSize: NSSize) {

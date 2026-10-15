@@ -6,7 +6,7 @@ A small, fast, native GitHub Flavored Markdown viewer for macOS with vim keybind
 - **GFM** via [swift-markdown](https://github.com/swiftlang/swift-markdown) (cmark-gfm): tables, task lists, strikethrough, fenced code, block quotes, images, autolinks, front matter.
 - **Vim keys** for navigation, plus normal trackpad / mouse-wheel scrolling.
 - **Live reload** — the file is watched with kqueue; saves (including atomic saves) re-render while keeping the scroll position.
-- Light / dark mode follows the system. Readable column width is capped and centered on wide windows.
+- Light / dark mode follows the system. Typography follows GitHub's markdown CSS (San Francisco 16pt, SF Mono at 85%, 1.5 line height, 948pt column, centered), and fonts are configurable.
 
 ## Install
 
@@ -62,6 +62,21 @@ Drop a file on the window to open it.
 
 The usual macOS shortcuts (`⌘C`, `⌘A`, `⌘F`, `⌘W`, `⌘Q`, `⌘+`, `⌘-`, `⌘0`, `⌃⌘F`) are in the menu bar.
 
+## Configuration
+
+Optional, read from `~/.config/mdv/config.toml` (`$XDG_CONFIG_HOME` is honored, `MDV_CONFIG=path` overrides).
+Press `r` after editing it to apply. See [`examples/config.toml`](examples/config.toml).
+
+```toml
+font = "Hiragino Sans"        # body / heading font family (default: system font, San Francisco)
+code_font = "JetBrains Mono"  # code font family (default: SF Mono)
+size = 16                     # base font size in points; `=` resets zoom to this
+code_scale = 0.85             # code size relative to body
+max_width = 948               # readable column width in points
+```
+
+Only flat `key = value` lines are parsed (no TOML library is linked). Unknown fonts fall back to the defaults with a warning on stderr.
+
 ## Layout
 
 | Path | What |
@@ -70,7 +85,8 @@ The usual macOS shortcuts (`⌘C`, `⌘A`, `⌘F`, `⌘W`, `⌘Q`, `⌘+`, `⌘-
 | `Sources/mdv/ViewerWindow.swift` | window, scroll view, load / reload, scrolling, find, zoom |
 | `Sources/mdv/VimTextView.swift` | read-only text view with the vim key handling |
 | `Sources/mdv/Renderer.swift` | swift-markdown AST → `NSAttributedString` (blocks are `NSTextTable` cells) |
-| `Sources/mdv/Theme.swift` | fonts and dynamic colors |
+| `Sources/mdv/Theme.swift` | fonts, sizes and dynamic colors |
+| `Sources/mdv/Config.swift` | `~/.config/mdv/config.toml` reader |
 | `Sources/mdv/FileWatcher.swift` | kqueue file watcher that survives atomic saves |
 
 Debug helpers (environment variables, wrapped by `mise r snapshot`): `MDV_TIMING=1` prints parse / render / layout times and
