@@ -1,0 +1,8 @@
+# mdv configuration — copy to ~/.config/mdv/config.toml
+# All keys are optional. Edit and press `r` in mdv to apply.
+
+# font = "Hiragino Sans"        # body / heading font family (default: system font, SF)
+# code_font = "JetBrains Mono"  # code font family (default: SF Mono)
+# size = 16                     # base font size in points (8-48); `=` resets zoom to this
+# code_scale = 0.85             # code size relative to body
+# max_width = 948               # readable column width in points

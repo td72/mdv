@@ -86,8 +86,9 @@ final class MarkdownRenderer {
     private func heading(_ h: Heading, _ ctx: Context) {
         flushMarker(ctx)
         let style = paragraphStyle(ctx)
-        style.paragraphSpacingBefore = theme.baseSize * (h.level <= 2 ? 1.4 : 1.1)
-        style.paragraphSpacing = theme.baseSize * 0.6
+        style.paragraphSpacingBefore = theme.baseSize * 1.5
+        style.paragraphSpacing = theme.baseSize * 1.0
+        style.lineSpacing = 0
         if h.level <= 2 {
             let b = box(leftMargin: ctx.relIndent, bottomMargin: style.paragraphSpacing)
             b.setBorderColor(theme.separator)
@@ -101,7 +102,7 @@ final class MarkdownRenderer {
             style.firstLineHeadIndent = 0
         }
         let s = NSMutableAttributedString()
-        s.append(inlines(h.inlineChildren, Inline(font: theme.heading(h.level), color: theme.text)))
+        s.append(inlines(h.inlineChildren, Inline(font: theme.heading(h.level), color: h.level == 6 ? theme.secondary : theme.text)))
         finish(s, style)
     }
 
@@ -109,7 +110,7 @@ final class MarkdownRenderer {
         flushMarker(ctx)
         var text = code
         while text.hasSuffix("\n") { text.removeLast() }
-        let b = box(leftMargin: ctx.relIndent, bottomMargin: theme.baseSize * 0.8)
+        let b = box(leftMargin: ctx.relIndent, bottomMargin: theme.baseSize * 1.0)
         b.backgroundColor = theme.codeBackground
         b.setWidth(theme.baseSize * 0.8, type: .absoluteValueType, for: .padding)
 
@@ -133,7 +134,7 @@ final class MarkdownRenderer {
 
     private func quote(_ q: BlockQuote, _ ctx: Context) {
         flushMarker(ctx)
-        let b = box(leftMargin: ctx.relIndent, bottomMargin: theme.baseSize * 0.8)
+        let b = box(leftMargin: ctx.relIndent, bottomMargin: theme.baseSize * 1.0)
         b.setBorderColor(theme.quoteBar)
         b.setWidth(3, type: .absoluteValueType, for: .border, edge: .minX)
         b.setWidth(theme.baseSize, type: .absoluteValueType, for: .padding, edge: .minX)
@@ -193,7 +194,7 @@ final class MarkdownRenderer {
         table.collapsesBorders = true
         table.hidesEmptyCells = false
         table.setWidth(ctx.relIndent, type: .absoluteValueType, for: .margin, edge: .minX)
-        table.setWidth(theme.baseSize * 0.8, type: .absoluteValueType, for: .margin, edge: .maxY)
+        table.setWidth(theme.baseSize * 1.0, type: .absoluteValueType, for: .margin, edge: .maxY)
 
         func alignment(_ col: Int) -> NSTextAlignment {
             guard col < t.columnAlignments.count, let a = t.columnAlignments[col] else { return .left }
@@ -352,8 +353,8 @@ final class MarkdownRenderer {
         style.textBlocks = ctx.blocks
         style.firstLineHeadIndent = ctx.relIndent
         style.headIndent = ctx.relIndent
-        style.paragraphSpacing = theme.baseSize * (ctx.inList ? 0.25 : 0.8)
-        style.lineSpacing = theme.baseSize * 0.18
+        style.paragraphSpacing = theme.baseSize * (ctx.inList ? 0.25 : 1.0)
+        style.lineSpacing = theme.baseSize * 0.3
         style.lineBreakMode = .byWordWrapping
         return style
     }
@@ -405,7 +406,7 @@ final class MarkdownRenderer {
     private func codeFont(matching font: NSFont) -> NSFont {
         let traits = NSFontManager.shared.traits(of: font)
         let weight: NSFont.Weight = traits.contains(.boldFontMask) ? .semibold : .regular
-        return .monospacedSystemFont(ofSize: (font.pointSize * 0.9).rounded(), weight: weight)
+        return theme.codeFont(size: (font.pointSize * 0.9).rounded(), weight: weight)
     }
 
     private func resolve(_ destination: String?) -> URL? {
