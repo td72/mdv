@@ -5,6 +5,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var controllers: [ViewerWindowController] = []
     private var openedAny = false
+    private var listener: SingleInstance.Listener?
     private let cliFiles: [URL]
     private let stdinText: String?
 
@@ -15,6 +16,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         buildMenu()
+        if ProcessInfo.processInfo.environment["MDV_SNAPSHOT"] == nil {
+            listener = SingleInstance.Listener { [weak self] req in self?.handle(req) }
+        }
         for url in cliFiles { open(url) }
         if let stdinText { show(.text(stdinText, title: "stdin")) }
         // Finder/`open` delivers URLs via application(_:open:) around launch; wait one tick.
@@ -44,13 +48,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func open(_ url: URL) { show(.file(url.standardizedFileURL)) }
 
+    /// Arguments forwarded by a second `mdv` process (see SingleInstance).
+    private func handle(_ req: SingleInstance.Request) {
+        for path in req.files { open(URL(fileURLWithPath: path)) }
+        if let text = req.stdin { show(.text(text, title: "stdin")) }
+        NSApp.activate(ignoringOtherApps: true)
+        if req.files.isEmpty, req.stdin == nil { showOpenPanel() }
+    }
+
+    /// The first document gets a window; later ones join it as tabs (the key window if
+    /// there are several). Tabs live inside the window — see ViewerWindowController.
     private func show(_ source: Source) {
         openedAny = true
+        if let host = tabHost() {
+            host.addTab(source)
+            host.window?.makeKeyAndOrderFront(nil)
+            return
+        }
         let c = ViewerWindowController(source: source)
         c.onClose = { [weak self] c in self?.controllers.removeAll { $0 === c } }
         controllers.append(c)
         c.showWindow(nil)
         c.window?.makeKeyAndOrderFront(nil)
+    }
+
+    private func tabHost() -> ViewerWindowController? {
+        let visible = controllers.filter { $0.window?.isVisible == true }
+        return visible.first { $0.window?.isKeyWindow == true }
+            ?? visible.first { $0.window?.isMainWindow == true }
+            ?? visible.last
     }
 
     @objc func showOpenPanel() {
@@ -78,11 +104,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         main.addItem(submenu(appMenu, title: "mdv"))
 
         let file = NSMenu(title: "File")
+        file.addItem(withTitle: "New Tab…", action: #selector(showOpenPanel), keyEquivalent: "t")
         file.addItem(withTitle: "Open…", action: #selector(showOpenPanel), keyEquivalent: "o")
         file.addItem(withTitle: "Reload", action: #selector(ViewerWindowController.reloadDocument(_:)), keyEquivalent: "r")
         file.addItem(withTitle: "Reveal in Finder", action: #selector(ViewerWindowController.revealInFinder(_:)), keyEquivalent: "R")
         file.addItem(.separator())
-        file.addItem(withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        file.addItem(withTitle: "Close Tab", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
         main.addItem(submenu(file, title: "File"))
 
         let edit = NSMenu(title: "Edit")
@@ -113,8 +140,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         windowMenu.addItem(withTitle: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
         windowMenu.addItem(withTitle: "Zoom", action: #selector(NSWindow.performZoom(_:)), keyEquivalent: "")
         windowMenu.addItem(.separator())
-        windowMenu.addItem(withTitle: "Show Next Tab", action: #selector(NSWindow.selectNextTab(_:)), keyEquivalent: "}")
-        windowMenu.addItem(withTitle: "Show Previous Tab", action: #selector(NSWindow.selectPreviousTab(_:)), keyEquivalent: "{")
+        windowMenu.addItem(withTitle: "Show Next Tab", action: #selector(ViewerWindowController.selectNextTab(_:)), keyEquivalent: "}")
+        windowMenu.addItem(withTitle: "Show Previous Tab", action: #selector(ViewerWindowController.selectPreviousTab(_:)), keyEquivalent: "{")
         main.addItem(submenu(windowMenu, title: "Window"))
         NSApp.windowsMenu = windowMenu
 
@@ -141,7 +168,10 @@ if args.contains("-h") || args.contains("--help") {
     keys:  j/k ^e/^y  line      d/u ^d/^u  half page    f/b ^f/^b space  page
            gg / G    top/bottom  5G  go to 50%  (counts work: 5j, 3d, ...)
            /  find   n/N  next/prev    y  copy selection    r  reload
-           o  open   q  close window   + / -  zoom   =  reset zoom
+           o  open   q  close tab/window   + / -  zoom   =  reset zoom
+           gt / gT  Tab / S-Tab  next / previous tab    3gt  third tab   ⌘1-9  nth / last tab
+
+    A second `mdv` hands its files to the running instance (they open as tabs).
     """)
     exit(0)
 }
@@ -158,6 +188,11 @@ for a in args where !a.hasPrefix("-") || a == "-" {
 if files.isEmpty, stdinText == nil, isatty(STDIN_FILENO) == 0, ProcessInfo.processInfo.environment["MDV_SNAPSHOT"] == nil {
     let data = FileHandle.standardInput.readDataToEndOfFile()
     if !data.isEmpty { stdinText = String(decoding: data, as: UTF8.self) }
+}
+
+if ProcessInfo.processInfo.environment["MDV_SNAPSHOT"] == nil,
+   SingleInstance.forward(.init(files: files.map(\.standardizedFileURL.path), stdin: stdinText)) {
+    exit(0)
 }
 
 let app = NSApplication.shared

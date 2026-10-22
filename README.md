@@ -31,14 +31,19 @@ Or just `mise r app` and drag `build/mdv.app` wherever you like. `swift build -c
 ## Usage
 
 ```sh
-mdv README.md               # open a file (several files → several windows / tabs)
+mdv README.md               # open a file (several files → several tabs)
 cat notes.md | mdv          # read from stdin
 open -a mdv README.md       # or double-click / drag a .md onto the Dock icon
 ```
 
-Relative links to other `.md` files open in the same window. `http(s)` / `mailto` links open in the default
+mdv is single-instance: while one is running, another `mdv file.md` hands the file over and exits, and the file
+opens as a new tab in the existing window. Tabs are drawn by mdv inside one window rather than with native
+macOS window tabs, so tiling window managers (AeroSpace, yabai) see a single window; the tab bar appears once
+there are two or more tabs. Click a tab to select it, middle-click to close it.
+
+Relative links to other `.md` files open in the same tab. `http(s)` / `mailto` links open in the default
 browser; links to other local files are revealed in Finder rather than launched, and other URL schemes are ignored.
-Drop a file on the window to open it.
+Drop files on the window to open them in new tabs.
 
 ## Keys
 
@@ -55,12 +60,16 @@ Drop a file on the window to open it.
 | `n` / `N` | next / previous match |
 | `y` | copy the selection |
 | `r` | reload |
-| `o` | open file… |
+| `o` | open file… (in a new tab) |
+| `gt` / `gT`, `Tab` / `Shift-Tab` | next / previous tab |
+| `3gt` | go to tab 3 |
 | `+` / `-` / `=` | zoom in / out / reset (persisted) |
-| `q` | close window (quits with the last one) |
+| `q` | close tab (the window goes with the last one, and the app with the last window) |
 | `Esc` | clear pending count / selection |
 
-The usual macOS shortcuts (`⌘C`, `⌘A`, `⌘F`, `⌘W`, `⌘Q`, `⌘+`, `⌘-`, `⌘0`, `⌃⌘F`) are in the menu bar.
+The usual macOS shortcuts (`⌘C`, `⌘A`, `⌘F`, `⌘W`, `⌘Q`, `⌘+`, `⌘-`, `⌘0`, `⌃⌘F`) are in the menu bar, plus `⌘T` (open a file
+in a new tab), `⌘⇧]` / `⌘⇧[` (next / previous tab) and `⌘1`…`⌘8` / `⌘9` (nth / last tab). No shortcut uses the Option key, so
+AeroSpace-style `⌥hjkl` bindings are untouched.
 
 ## Configuration
 
@@ -82,7 +91,9 @@ Only flat `key = value` lines are parsed (no TOML library is linked). Unknown fo
 | Path | What |
 |------|------|
 | `Sources/mdv/main.swift` | app delegate, menu bar, CLI parsing |
-| `Sources/mdv/ViewerWindow.swift` | window, scroll view, load / reload, scrolling, find, zoom |
+| `Sources/mdv/ViewerWindow.swift` | window, in-window tab bar, tab switching / closing |
+| `Sources/mdv/Document.swift` | one tab: scroll view, load / reload, scrolling, find, zoom, link handling |
+| `Sources/mdv/SingleInstance.swift` | CFMessagePort hand-off from a second `mdv` process to the running one |
 | `Sources/mdv/VimTextView.swift` | read-only text view with the vim key handling |
 | `Sources/mdv/Renderer.swift` | swift-markdown AST → `NSAttributedString` (blocks are `NSTextTable` cells) |
 | `Sources/mdv/Theme.swift` | fonts, sizes and dynamic colors |

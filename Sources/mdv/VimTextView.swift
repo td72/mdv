@@ -14,6 +14,8 @@ protocol ViewerCommands: AnyObject {
     func reload()
     func openFile()
     func closeWindow()
+    func selectTab(offset: Int)
+    func selectTab(index: Int)
     func zoom(_ delta: Int)
     func resetZoom()
 }
@@ -56,7 +58,14 @@ final class VimTextView: NSTextView {
         let hasCount = count > 0
         defer { if !(chars.first?.isNumber ?? false) && chars != "g" { count = 0; pendingG = false } }
 
-        if flags.contains(.command) { return super.keyDown(with: event) }
+        if flags.contains(.command) {
+            // ⌘1…⌘8 → nth tab, ⌘9 → last tab (browser convention); the rest is the menu bar's.
+            if flags == .command, let d = Int(chars), 1...9 ~= d {
+                c.selectTab(index: d == 9 ? .max : d - 1)
+                return
+            }
+            return super.keyDown(with: event)
+        }
 
         if flags.contains(.control) {
             switch chars {
@@ -82,6 +91,8 @@ final class VimTextView: NSTextView {
             case .pageUp: c.scrollPages(-n)
             case .home: c.scrollToTop()
             case .end: c.scrollToBottom()
+            case .tab: c.selectTab(offset: n) // Tab / Shift-Tab cycle through tabs
+            case .backTab: c.selectTab(offset: -n)
             default: break
             }
             return
@@ -96,6 +107,10 @@ final class VimTextView: NSTextView {
             if pendingG { c.scrollToTop(); pendingG = false; count = 0 } else { pendingG = true }
         case "G":
             if hasCount { c.scrollToPercent(min(100, count)) } else { c.scrollToBottom() }
+        case "t" where pendingG: // gt / 3gt
+            if hasCount { c.selectTab(index: count - 1) } else { c.selectTab(offset: 1) }
+        case "T" where pendingG: // gT
+            c.selectTab(offset: -n)
         case "j": c.scrollLines(n)
         case "k": c.scrollLines(-n)
         case "h": c.scrollHorizontal(-n)
