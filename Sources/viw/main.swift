@@ -180,6 +180,22 @@ if args.contains("-h") || args.contains("--help") {
     exit(0)
 }
 
+// Debug: `viw --unzip archive.zip` lists the entries, `viw --unzip archive.zip name` writes one to stdout.
+if args.first == "--unzip", args.count >= 2 {
+    do {
+        let zip = try ZipArchive(url: URL(fileURLWithPath: args[1]))
+        if args.count == 2 {
+            for n in zip.names { print("\(zip.entries[n]!.uncompressedSize)\t\(zip.entries[n]!.method == 8 ? "deflate" : "stored")\t\(n)") }
+        } else {
+            FileHandle.standardOutput.write(try zip.data(for: args[2]))
+        }
+        exit(0)
+    } catch {
+        FileHandle.standardError.write("viw: \(error)\n".data(using: .utf8)!)
+        exit(1)
+    }
+}
+
 var files: [URL] = []
 var stdinText: String?
 for a in args where !a.hasPrefix("-") || a == "-" {

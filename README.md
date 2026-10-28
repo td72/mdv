@@ -145,6 +145,7 @@ Only flat `key = value` lines are parsed (no TOML library is linked). Unknown fo
 | `Sources/viw/PDFDocumentView.swift` | `DocumentView` for PDFs: PDFKit, find, zoom, rotate |
 | `Sources/viw/ImageDocumentView.swift` | `DocumentView` for images: fit / zoom / rotate |
 | `Sources/viw/CSV.swift` | RFC 4180 parser with delimiter and encoding detection |
+| `Sources/viw/ZipArchive.swift` | dependency-free zip reader (central directory, stored / deflate via Compression, CRC-32) for xlsx |
 | `Sources/viw/VimKeys.swift` | `ViewerCommands` and the vim key map shared by the text and table views |
 | `Sources/viw/Toast.swift` | the short-lived "Copied …" pill |
 | `Sources/viw/SingleInstance.swift` | CFMessagePort hand-off from a second `viw` process to the running one |
@@ -156,7 +157,8 @@ Only flat `key = value` lines are parsed (no TOML library is linked). Unknown fo
 | `Sources/viw/Config.swift` | `~/.config/viw/config.toml` reader |
 | `Sources/viw/FileWatcher.swift` | kqueue file watcher that survives atomic saves |
 
-Debug helpers (environment variables, wrapped by `mise r snapshot`): `VIW_TIMING=1` prints parse / render / layout /
+Debug helpers: `viw --unzip archive.zip [entry]` lists an archive's entries or writes one to stdout.
+Environment variables (wrapped by `mise r snapshot`): `VIW_TIMING=1` prints parse / render / layout /
 highlight-query times and scroll offsets to stderr, `VIW_SNAPSHOT=out.png` renders the whole document to a PNG and exits (`VIW_SNAPSHOT_WIDTH=700`,
 `VIW_DARK=1` to vary).
 
