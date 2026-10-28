@@ -27,6 +27,7 @@ enum FileKind {
     case json         // pretty-printed, highlighted as JSON
     case jsonl        // JSON Lines: one pretty-printed record per block
     case table        // CSV / TSV: grid view
+    case workbook     // xlsx / xlsm: grid view with a sheet bar
     case pdf          // PDFKit
     case image        // png / jpg / gif / heic / …
     case plain        // unknown extension: one monochrome code block
@@ -40,6 +41,7 @@ enum FileKind {
         if ["json", "jsonc", "json5"].contains(ext) { return .json }
         if ["jsonl", "ndjson"].contains(ext) { return .jsonl }
         if ["csv", "tsv", "tab"].contains(ext) { return .table }
+        if ["xlsx", "xlsm"].contains(ext) { return .workbook }
         if ext == "pdf" { return .pdf }
         if imageExtensions.contains(ext) { return .image }
         if ext.isEmpty {
@@ -114,6 +116,8 @@ protocol DocumentView: AnyObject {
     func togglePageMode() -> Bool
     /// `t`: PDF page overview; nil where there is none.
     func toggleThumbnails() -> Bool?
+    /// `]s` / `[s`: next / previous sheet of a workbook; other views ignore it.
+    func selectSheet(offset: Int)
 
     /// Debug: render the whole content to a PNG (VIW_SNAPSHOT).
     func snapshot(to path: String)
@@ -126,6 +130,7 @@ extension DocumentView {
     func rotate(_ quarterTurns: Int) -> Bool { false }
     func togglePageMode() -> Bool { false }
     func toggleThumbnails() -> Bool? { nil }
+    func selectSheet(offset: Int) {}
 }
 
 /// What a document needs from the window that hosts it as a tab.
@@ -178,7 +183,7 @@ final class DocumentController: NSObject, ViewerCommands {
     /// Which `DocumentView` draws `kind`; the same class is reused across loads.
     private static func viewType(for kind: FileKind) -> DocumentView.Type {
         switch kind {
-        case .table: return TableDocumentView.self
+        case .table, .workbook: return TableDocumentView.self
         case .pdf: return PDFDocumentView.self
         case .image: return ImageDocumentView.self
         default: return TextDocumentView.self
@@ -268,6 +273,9 @@ final class DocumentController: NSObject, ViewerCommands {
 
     /// `t` / View › PDF Thumbnails: the page overview.
     func toggleThumbnails() { _ = documentView.toggleThumbnails() }
+
+    /// `]s` / `[s` / View › Next / Previous Sheet (xlsx).
+    func selectSheet(offset: Int) { documentView.selectSheet(offset: offset) }
 
     /// `I` / View › Detail Pane: right ⇄ bottom, remembered like the zoom level.
     func togglePanePosition() {

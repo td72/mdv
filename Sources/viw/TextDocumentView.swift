@@ -151,7 +151,7 @@ final class TextDocumentView: NSObject, DocumentView, NSTextViewDelegate {
             if records.count < all.count { truncated = (records.count, all.count) }
             attributed.append(renderer.renderCodeBlocks(records, language: "json", boxed: records.count <= 300))
             codeBlocks = renderer.codeBlocks
-        case .plain, .table, .pdf, .image: // the last three have their own DocumentView; text only if they ever land here
+        case .plain, .table, .workbook, .pdf, .image: // the last four have their own DocumentView; text only if they ever land here
             attributed.append(renderer.renderCode(clamp(text), language: nil))
         }
         if let t = truncated {

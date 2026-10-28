@@ -135,6 +135,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         view.addItem(withTitle: "Detail Pane: Right / Bottom", action: #selector(ViewerWindowController.togglePanePosition(_:)), keyEquivalent: "D")
         view.addItem(withTitle: "PDF: Page / Scroll View", action: #selector(ViewerWindowController.togglePageMode(_:)), keyEquivalent: "P")
         view.addItem(withTitle: "PDF: Page Overview", action: #selector(ViewerWindowController.toggleThumbnails(_:)), keyEquivalent: "T")
+        view.addItem(NSMenuItem.separator())
+        view.addItem(withTitle: "Next Sheet", action: #selector(ViewerWindowController.selectNextSheet(_:)), keyEquivalent: "]")
+        view.addItem(withTitle: "Previous Sheet", action: #selector(ViewerWindowController.selectPreviousSheet(_:)), keyEquivalent: "[")
         view.addItem(.separator())
         view.addItem(withTitle: "Enter Full Screen", action: #selector(NSWindow.toggleFullScreen(_:)), keyEquivalent: "f")
             .keyEquivalentModifierMask = [.command, .control]
@@ -164,9 +167,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 let args = Array(CommandLine.arguments.dropFirst())
 if args.contains("-h") || args.contains("--help") {
     print("""
-    viw — vim-keyed viewer (markdown)
+    viw — vim-keyed viewer (markdown, code, JSON, CSV, xlsx, PDF, images)
 
-    usage: viw [FILE ...]        open files (markdown, or source code with syntax highlighting)
+    usage: viw [FILE ...]        open files (markdown, source code, .json, .csv / .tsv, .xlsx, .pdf, images)
            cat FILE | viw        read markdown from stdin
 
     keys:  j/k ^e/^y  line      d/u ^d/^u  half page    f/b ^f/^b space  page
@@ -174,6 +177,7 @@ if args.contains("-h") || args.contains("--help") {
            /  find   n/N  next/prev    f  filter rows (tables)   y  copy    r  reload
            o  open   q  close tab/window   + / -  zoom   =  reset zoom
            gt / gT  Tab / S-Tab  next / previous tab    3gt  third tab   ⌘1-9  nth / last tab
+           ]s / [s  next / previous sheet (xlsx)    p / t / r  PDF page view / overview / rotate
 
     A second `viw` hands its files to the running instance (they open as tabs).
     """)
@@ -188,6 +192,33 @@ if args.first == "--unzip", args.count >= 2 {
             for n in zip.names { print("\(zip.entries[n]!.uncompressedSize)\t\(zip.entries[n]!.method == 8 ? "deflate" : "stored")\t\(n)") }
         } else {
             FileHandle.standardOutput.write(try zip.data(for: args[2]))
+        }
+        exit(0)
+    } catch {
+        FileHandle.standardError.write("viw: \(error)\n".data(using: .utf8)!)
+        exit(1)
+    }
+}
+
+// Debug: `viw --xlsx book.xlsx` lists the sheets, `viw --xlsx book.xlsx N` (or a sheet name) writes that sheet as TSV.
+if args.first == "--xlsx", args.count >= 2 {
+    do {
+        let t0 = CFAbsoluteTimeGetCurrent()
+        let wb = try Workbook(url: URL(fileURLWithPath: args[1]))
+        if args.count == 2 {
+            for (i, s) in wb.sheets.enumerated() { print("\(i + 1)\t\(s.name)\(s.hidden ? "\t(hidden)" : "")") }
+        } else {
+            guard let i = Int(args[2]).map({ $0 - 1 }) ?? wb.sheets.firstIndex(where: { $0.name == args[2] }), wb.sheets.indices.contains(i) else {
+                FileHandle.standardError.write("viw: no sheet \(args[2])\n".data(using: .utf8)!)
+                exit(1)
+            }
+            let t = try wb.table(forSheet: i)
+            var out = t.header.joined(separator: "\t") + "\n"
+            for r in t.rows { out += r.joined(separator: "\t") + "\n" }
+            FileHandle.standardOutput.write(out.data(using: .utf8)!)
+            if ProcessInfo.processInfo.environment["VIW_TIMING"] != nil {
+                FileHandle.standardError.write("xlsx: \(Int((CFAbsoluteTimeGetCurrent() - t0) * 1000)) ms (\(t.rows.count) rows × \(t.columnCount) cols)\n".data(using: .utf8)!)
+            }
         }
         exit(0)
     } catch {

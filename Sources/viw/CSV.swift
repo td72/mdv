@@ -13,8 +13,8 @@ enum ColumnType: String {
         var any = false
         for cell in cells where !cell.isEmpty {
             any = true
-            if candidates.contains(.integer), Int(cell) == nil { candidates.remove(.integer) }
-            if candidates.contains(.number), Double(cell) == nil { candidates.remove(.number) }
+            if candidates.contains(.integer), integer(cell) == nil { candidates.remove(.integer) }
+            if candidates.contains(.number), number(cell) == nil { candidates.remove(.number) }
             if candidates.contains(.boolean), !booleans.contains(cell.lowercased()) { candidates.remove(.boolean) }
             if candidates.contains(.date), dateParts(cell) == nil { candidates.remove(.date) }
             if candidates.isEmpty { return .text }
@@ -25,6 +25,41 @@ enum ColumnType: String {
     }
 
     static let booleans: Set<String> = ["true", "false", "yes", "no"]
+
+    /// `Double` of a cell, also accepting thousands separators and a trailing `%` as spreadsheets
+    /// format them ("1,234.5", "12.5%"); the text is never altered, only read.
+    static func number(_ s: String) -> Double? {
+        if let d = Double(s) { return d }
+        guard let stripped = stripFormatting(s) else { return nil }
+        return Double(stripped)
+    }
+
+    static func integer(_ s: String) -> Int? {
+        if let i = Int(s) { return i }
+        guard let stripped = stripFormatting(s) else { return nil }
+        return Int(stripped)
+    }
+
+    /// "1,234,567%" → "1234567" when the commas sit between digits in groups of three; nil otherwise.
+    private static func stripFormatting(_ s: String) -> String? {
+        var bytes = Array(s.utf8)
+        guard !bytes.isEmpty else { return nil }
+        if bytes.last == UInt8(ascii: "%") { bytes.removeLast() }
+        guard bytes.contains(UInt8(ascii: ",")) || s.hasSuffix("%") else { return nil }
+        var out: [UInt8] = []
+        var sinceComma = -1
+        for b in bytes {
+            if b == UInt8(ascii: ",") {
+                guard sinceComma == -1 ? out.contains(where: { $0 >= 48 && $0 <= 57 }) : sinceComma == 3 else { return nil }
+                sinceComma = 0
+            } else {
+                if sinceComma >= 0 { if b >= 48 && b <= 57 { sinceComma += 1 } else { guard sinceComma == 3 else { return nil }; sinceComma = -1 } }
+                out.append(b)
+            }
+        }
+        if sinceComma >= 0, sinceComma != 3 { return nil }
+        return String(decoding: out, as: UTF8.self)
+    }
 
     /// `yyyy-MM-dd` / `yyyy/MM/dd` with an optional ` HH:mm[:ss]` or `THH:mm[:ss]` → sortable parts.
     static func dateParts(_ s: String) -> [Int]? {
@@ -56,6 +91,8 @@ struct TableData {
     /// Rows dropped past `CSV.maxRows` (total rows in the file, including the header).
     var totalRows: Int
     var types: [ColumnType] = []
+    /// Column widths in characters from the file (xlsx `<cols>`), nil where the data decides.
+    var columnWidths: [Double?] = []
     var columnCount: Int { header.count }
     var truncated: Bool { rows.count + 1 < totalRows }
 

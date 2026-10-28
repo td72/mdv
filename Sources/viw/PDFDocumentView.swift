@@ -473,6 +473,7 @@ final class OverviewCommands: ViewerCommands {
     func togglePanePosition() {}
     func togglePageMode() { forward.togglePageMode() }
     func toggleThumbnails() { forward.toggleThumbnails() }
+    func selectSheet(offset: Int) { forward.selectSheet(offset: offset) }
     func reload() {}
     func rotateBack() {}
     func openFile() { forward.openFile() }

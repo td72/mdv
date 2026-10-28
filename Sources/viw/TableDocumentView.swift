@@ -1,8 +1,9 @@
 import AppKit
 
-/// `DocumentView` for delimited data (CSV / TSV; xlsx later): an NSTableView with a fixed
-/// header, a row-number column, auto-sized columns, vim row navigation, an incremental
-/// search bar and TSV copy. Rows are drawn lazily, so 100k × 20 stays smooth.
+/// `DocumentView` for tabular data (CSV / TSV, and xlsx one sheet at a time): an NSTableView
+/// with a fixed header, a row-number column, auto-sized columns, vim row navigation, an
+/// incremental search bar and TSV copy. Rows are drawn lazily, so 100k × 20 stays smooth.
+/// Workbooks add a sheet bar under the grid (`]s` / `[s`, or click).
 final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NSTableViewDelegate, NSSearchFieldDelegate, NSSplitViewDelegate {
     private let root = NSView(frame: NSRect(x: 0, y: 0, width: 880, height: 960))
     private let split = NSSplitView()
@@ -28,6 +29,11 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
     private let searchBar = NSView()
     private let searchField = NSSearchField()
     private let footer = NSTextField(labelWithString: "")
+    /// xlsx: the open book, its sheet tabs, and the sheets parsed so far (parsing is on demand).
+    private var workbook: Workbook?
+    private var sheetIndex = 0
+    private var sheetCache: [Int: TableData] = [:]
+    private let sheetBar = TabBarView()
     private var data = TableData(header: [], rows: [], totalRows: 0)
     private var theme = Theme.load()
     private var font = NSFont.systemFont(ofSize: 14)
@@ -50,6 +56,12 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
     private static let rowNumberID = NSUserInterfaceItemIdentifier("#")
 
     var view: NSView { root }
+    /// Window subtitle for workbooks: the sheet name.
+    var status: String? {
+        guard let workbook, workbook.sheets.indices.contains(sheetIndex) else { return nil }
+        let s = workbook.sheets[sheetIndex]
+        return s.name + (s.hidden ? " (hidden)" : "")
+    }
     var onOpenFile: ((URL) -> Void)?
     var onStatusChange: (() -> Void)?
     var commands: ViewerCommands? {
@@ -156,6 +168,11 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
         table.onFocusChange = { [weak self] _ in self?.redrawCursorRows() }
         scrollView.documentView = table
 
+        sheetBar.autoresizingMask = [.width, .maxYMargin]
+        sheetBar.isHidden = true
+        sheetBar.onSelect = { [weak self] i in self?.selectSheet(index: i) }
+        root.addSubview(sheetBar)
+
         footer.autoresizingMask = [.width, .maxYMargin]
         footer.textColor = .secondaryLabelColor
         footer.alignment = .center
@@ -167,8 +184,11 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
     private func layout() {
         let b = root.bounds
         let top: CGFloat = searchBar.isHidden ? 0 : Self.searchBarHeight
-        let bottom: CGFloat = footer.isHidden ? 0 : Self.footerHeight
+        let footerH: CGFloat = footer.isHidden ? 0 : Self.footerHeight
+        let sheetH: CGFloat = sheetBar.isHidden ? 0 : TabBarView.height
+        let bottom = footerH + sheetH
         searchBar.frame = NSRect(x: 0, y: b.height - top, width: b.width, height: top)
+        sheetBar.frame = NSRect(x: 0, y: footerH, width: b.width, height: sheetH)
         barLabel.frame = NSRect(x: 8, y: 9, width: 48, height: 16)
         searchField.frame = NSRect(x: 64, y: 6, width: b.width - 72, height: 22)
         searchField.autoresizingMask = [.width]
@@ -215,6 +235,11 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
                 data = TableData(header: ["Cannot read \(url.path)"], rows: [], totalRows: 0)
                 break
             }
+            if case .workbook = kind {
+                loadWorkbook(url)
+                break
+            }
+            workbook = nil
             let t0 = CFAbsoluteTimeGetCurrent()
             data = CSV.table(from: bytes, url: url)
             if ProcessInfo.processInfo.environment["VIW_TIMING"] != nil {
@@ -222,8 +247,10 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
                 FileHandle.standardError.write("csv parse: \(ms) ms (\(data.rows.count) rows × \(data.columnCount) cols)\n".data(using: .utf8)!)
             }
         case .text(let s, _):
+            workbook = nil
             data = CSV.table(from: Data(s.utf8), url: URL(fileURLWithPath: "stdin.csv"))
         }
+        updateSheetBar()
         match = nil
         rebuildColumns()
         if let c = sortColumn, c >= data.columnCount { sortColumn = nil }
@@ -235,6 +262,81 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
             scrollView.contentView.scroll(to: savedOrigin)
             scrollView.reflectScrolledClipView(scrollView.contentView)
         }
+    }
+
+    // MARK: Workbooks (xlsx)
+
+    /// Open the book and show the sheet that was selected before (a reload keeps the sheet).
+    private func loadWorkbook(_ url: URL) {
+        let t0 = CFAbsoluteTimeGetCurrent()
+        sheetCache = [:]
+        do {
+            let wb = try Workbook(url: url)
+            workbook = wb
+            sheetIndex = min(sheetIndex, wb.sheets.count - 1)
+            data = sheetTable(sheetIndex)
+        } catch {
+            workbook = nil
+            data = TableData(header: ["Cannot read \(url.lastPathComponent): \(error)"], rows: [], totalRows: 0)
+        }
+        if ProcessInfo.processInfo.environment["VIW_TIMING"] != nil {
+            let ms = Int((CFAbsoluteTimeGetCurrent() - t0) * 1000)
+            FileHandle.standardError.write("xlsx open: \(ms) ms (\(data.rows.count) rows × \(data.columnCount) cols, \(workbook?.sheets.count ?? 0) sheets)\n".data(using: .utf8)!)
+        }
+    }
+
+    private func sheetTable(_ i: Int) -> TableData {
+        if let t = sheetCache[i] { return t }
+        guard let workbook else { return TableData(header: [], rows: [], totalRows: 0) }
+        let t: TableData
+        do { t = try workbook.table(forSheet: i) } catch {
+            t = TableData(header: ["Cannot read sheet \(workbook.sheets[i].name): \(error)"], rows: [], totalRows: 0)
+        }
+        sheetCache[i] = t
+        return t
+    }
+
+    private func updateSheetBar() {
+        sheetBar.isHidden = workbook == nil
+        guard let workbook else { return }
+        sheetBar.items = workbook.sheets.enumerated().map { i, s in
+            (title: s.name, tooltip: "\(s.name) — sheet \(i + 1) of \(workbook.sheets.count)" + (s.hidden ? " (hidden in Excel)" : ""))
+        }
+        sheetBar.selected = sheetIndex
+    }
+
+    /// `]s` / `[s`: cycle through the sheets (wrapping, like tabs).
+    func selectSheet(offset: Int) {
+        guard let workbook, workbook.sheets.count > 1 else { return }
+        let n = workbook.sheets.count
+        selectSheet(index: ((sheetIndex + offset) % n + n) % n)
+    }
+
+    /// Show sheet `i`: a different grid, so filter, sort and cursors start over.
+    func selectSheet(index i: Int) {
+        guard let workbook, workbook.sheets.indices.contains(i), i != sheetIndex else { return }
+        sheetIndex = i
+        data = sheetTable(i)
+        sortColumn = nil
+        sortAscending = true
+        filterQuery = ""
+        match = nil
+        columnIndex = 0
+        fieldIndex = 0
+        if !searchBar.isHidden { hideSearch() }
+        filtered = nil
+        table.reloadData() // drop the old sheet's rows before the columns change under them
+        rebuildColumns()
+        rebuildVisible()
+        table.reloadData()
+        table.deselectAll(nil)
+        scrollView.contentView.scroll(to: .zero)
+        scrollView.reflectScrolledClipView(scrollView.contentView)
+        sheetBar.selected = i
+        updateFooter()
+        updateDetail()
+        onStatusChange?()
+        focus()
     }
 
     private func updateFooter() {
@@ -276,9 +378,14 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
             header.typeName = type.rawValue
             col.headerCell = header
             col.headerToolTip = "\(name) — \(type.rawValue)"
-            var w = width(name) + width(type.rawValue) + 24
-            for row in sample where i < row.count { w = max(w, width(row[i])) }
-            col.width = min(max(w + 12, 56), 480)
+            if i < data.columnWidths.count, let chars = data.columnWidths[i] {
+                // xlsx column width: in characters of the digit width (Excel's unit), as the author set it
+                col.width = min(max(CGFloat(chars) * width("0") + 12, 40), 640)
+            } else {
+                var w = width(name) + width(type.rawValue) + 24
+                for row in sample where i < row.count { w = max(w, width(row[i])) }
+                col.width = min(max(w + 12, 56), 480)
+            }
             col.minWidth = 32
             table.addTableColumn(col)
         }
@@ -420,7 +527,8 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
     }
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-        guard let tableColumn else { return nil }
+        // Rows of a previous load can still be asked for while columns change (data shrank): nothing to show.
+        guard let tableColumn, row < rowCount, original(row) < data.rows.count else { return nil }
         let id = NSUserInterfaceItemIdentifier("cell")
         let cell: NSTableCellView
         if let reused = tableView.makeView(withIdentifier: id, owner: nil) as? NSTableCellView {
@@ -581,7 +689,7 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
             }
         }
         switch type {
-        case .integer, .number: sorted(cells.map { Double($0) })
+        case .integer, .number: sorted(cells.map { ColumnType.number($0) })
         case .boolean: sorted(cells.map { $0.isEmpty ? nil : (["true", "yes"].contains($0.lowercased()) ? 1 : 0) })
         case .date: sorted(cells.map { ColumnType.dateParts($0).map(DateKey.init) })
         case .text: sorted(cells.map { $0.isEmpty ? nil : $0.lowercased() })
@@ -918,6 +1026,7 @@ final class PaneCommands: ViewerCommands {
     func togglePanePosition() { forward.togglePanePosition() }
     func togglePageMode() { forward.togglePageMode() }
     func toggleThumbnails() { forward.toggleThumbnails() }
+    func selectSheet(offset: Int) { forward.selectSheet(offset: offset) }
     func reload() { forward.reload() }
     func rotateBack() { forward.rotateBack() }
     func openFile() { forward.openFile() }
