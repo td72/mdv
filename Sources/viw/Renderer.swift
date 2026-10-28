@@ -57,12 +57,23 @@ final class MarkdownRenderer {
         return out
     }
 
-    /// A whole file as one code block (source files opened directly). `language` nil → plain.
+    /// A whole file as code (source files opened directly). `language` nil → plain. Drawn without
+    /// a box: an NSTextBlock per paragraph makes TextKit 1 quadratic on big files (see codeBlock).
     func renderCode(_ code: String, language: String?) -> NSAttributedString {
+        renderCodeBlocks([code], language: language, boxed: false)
+    }
+
+    /// Several code blocks (JSON Lines records): one box each while there are few, otherwise
+    /// one unboxed run separated by blank lines.
+    func renderCodeBlocks(_ blocks: [String], language: String?, boxed: Bool) -> NSAttributedString {
         out = NSMutableAttributedString()
         codeBlocks = []
         pendingMarker = nil
-        codeBlock(code, Context(), dim: false, language: language)
+        if boxed {
+            for code in blocks { codeBlock(code, Context(), dim: false, language: language) }
+        } else {
+            codeBlock(blocks.joined(separator: "\n\n"), Context(), dim: false, language: language, boxed: false)
+        }
         return out
     }
 
@@ -125,16 +136,23 @@ final class MarkdownRenderer {
         finish(s, style)
     }
 
-    private func codeBlock(_ code: String, _ ctx: Context, dim: Bool, language: String? = nil) {
+    /// `boxed`: wrap the lines in a gray NSTextBlock. Every paragraph becomes a table cell, and
+    /// TextKit 1 computes cell rects linearly, so a 100k-line file drawn boxed takes minutes to
+    /// scroll to the end; whole-file views pass false.
+    private func codeBlock(_ code: String, _ ctx: Context, dim: Bool, language: String? = nil, boxed: Bool = true) {
         flushMarker(ctx)
         var text = code
         while text.hasSuffix("\n") { text.removeLast() }
-        let b = box(leftMargin: ctx.relIndent, bottomMargin: theme.baseSize * 1.0)
-        b.backgroundColor = theme.codeBackground
-        b.setWidth(theme.baseSize * 0.8, type: .absoluteValueType, for: .padding)
 
         let style = NSMutableParagraphStyle()
-        style.textBlocks = ctx.blocks + [b]
+        if boxed {
+            let b = box(leftMargin: ctx.relIndent, bottomMargin: theme.baseSize * 1.0)
+            b.backgroundColor = theme.codeBackground
+            b.setWidth(theme.baseSize * 0.8, type: .absoluteValueType, for: .padding)
+            style.textBlocks = ctx.blocks + [b]
+        } else {
+            style.textBlocks = ctx.blocks
+        }
         style.lineBreakMode = .byCharWrapping
         style.paragraphSpacing = 0
         style.lineSpacing = 2

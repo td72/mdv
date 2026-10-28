@@ -25,6 +25,8 @@ enum Source {
 enum FileKind {
     case markdown
     case code(String) // tree-sitter language (fence info string)
+    case json         // pretty-printed, highlighted as JSON
+    case jsonl        // JSON Lines: one pretty-printed record per block
     case plain        // unknown extension: one monochrome code block
 
     static let markdownExtensions: Set<String> = ["md", "markdown", "mdown", "mkd", "mkdn", "txt"]
@@ -32,6 +34,8 @@ enum FileKind {
     static func of(_ url: URL) -> FileKind {
         let ext = url.pathExtension.lowercased()
         if markdownExtensions.contains(ext) { return .markdown }
+        if ["json", "jsonc", "json5"].contains(ext) { return .json }
+        if ["jsonl", "ndjson"].contains(ext) { return .jsonl }
         if ext.isEmpty {
             // "Dockerfile" & co. carry the language in the name; anything else without an extension reads as markdown.
             return Highlighter.language(for: url.lastPathComponent) != nil ? .code(url.lastPathComponent) : .markdown
@@ -63,6 +67,10 @@ final class DocumentController: NSObject, NSTextViewDelegate, ViewerCommands {
     private var watcher: FileWatcher?
     /// Bumped on every load so a highlight pass for an older rendering is dropped.
     private var highlightGeneration = 0
+
+    /// Text beyond this (UTF-16 units) is cut off with a notice. TextKit lays the whole
+    /// document out before the window shows, and a million paragraphs take tens of seconds.
+    static let maxDisplayLength = 1 << 20
     weak var host: DocumentHost?
 
     var view: NSView { scrollView }
@@ -155,12 +163,26 @@ final class DocumentController: NSObject, NSTextViewDelegate, ViewerCommands {
             t0 = t
         }
 
+        // Cap what reaches the text system; `truncated` (lines shown / lines total) drives the notice.
+        var truncated: (shown: Int, total: Int)?
+        func lines(_ s: String) -> Int { s.utf8.reduce(0) { $0 + ($1 == 0x0A ? 1 : 0) } + 1 }
+        func clamp(_ s: String) -> String {
+            let ns = s as NSString
+            guard ns.length > Self.maxDisplayLength else { return s }
+            var cut = Self.maxDisplayLength
+            let nl = ns.range(of: "\n", options: .backwards, range: NSRange(location: 0, length: cut))
+            if nl.location != NSNotFound, nl.location > cut / 2 { cut = nl.location }
+            let shown = ns.substring(to: cut)
+            truncated = (lines(shown), lines(s))
+            return shown
+        }
+
         let renderer = MarkdownRenderer(theme: theme, baseURL: baseURL)
         let attributed = NSMutableAttributedString()
         var codeBlocks: [MarkdownRenderer.CodeBlockRef] = []
         switch kind {
         case .markdown:
-            let (front, body) = splitFrontMatter(text)
+            let (front, body) = splitFrontMatter(clamp(text))
             if let front {
                 attributed.append(renderer.render(Document(parsing: "```yaml\n\(front)\n```\n")))
                 codeBlocks += renderer.codeBlocks
@@ -171,19 +193,49 @@ final class DocumentController: NSObject, NSTextViewDelegate, ViewerCommands {
             attributed.append(renderer.render(document))
             codeBlocks += renderer.codeBlocks.map { var r = $0; r.range.location += offset; return r }
         case .code(let language):
-            attributed.append(renderer.renderCode(text, language: language))
+            attributed.append(renderer.renderCode(clamp(text), language: language))
+            codeBlocks = renderer.codeBlocks
+        case .json:
+            // Format first, cut after, so what is shown keeps its structure. Invalid JSON
+            // (or jsonc with comments) is shown as written.
+            attributed.append(renderer.renderCode(clamp(JSONPretty.format(text) ?? text), language: "json"))
+            codeBlocks = renderer.codeBlocks
+        case .jsonl:
+            var records: [String] = []
+            var shown = 0
+            let all = JSONPretty.formatLines(text)
+            for r in all {
+                if shown + r.utf16.count > Self.maxDisplayLength { break }
+                shown += r.utf16.count + 1
+                records.append(r)
+            }
+            if records.count < all.count { truncated = (records.count, all.count) }
+            attributed.append(renderer.renderCodeBlocks(records, language: "json", boxed: records.count <= 300))
             codeBlocks = renderer.codeBlocks
         case .plain:
-            attributed.append(renderer.renderCode(text, language: nil))
+            attributed.append(renderer.renderCode(clamp(text), language: nil))
+        }
+        if let t = truncated {
+            let f = NumberFormatter()
+            f.numberStyle = .decimal
+            let unit: String
+            if case .jsonl = kind { unit = "records" } else { unit = "lines" }
+            let style = NSMutableParagraphStyle()
+            style.paragraphSpacingBefore = theme.baseSize
+            attributed.append(NSAttributedString(
+                string: "Showing the first \(f.string(from: t.shown as NSNumber)!) of \(f.string(from: t.total as NSNumber)!) \(unit) — the rest is cut off to keep the viewer responsive.\n",
+                attributes: [.font: theme.body, .foregroundColor: theme.secondary, .paragraphStyle: style]))
         }
         lap("render")
 
         textView.textStorage?.setAttributedString(attributed)
         lap("setAttributedString")
-        if timing {
-            textView.layoutManager?.ensureLayout(for: textView.textContainer!)
-            lap("layout")
-        }
+        // Lay everything out now, before the display cycle gets a chance to. TextKit 1 filling
+        // layout holes from a display request (setNeedsDisplay, cursor tracking) invalidates the
+        // display per line fragment and turns quadratic: ~1 MB of text takes a minute that way
+        // and well under a second this way. See also VimTextView.relayoutColumn.
+        textView.layoutManager?.ensureLayout(for: textView.textContainer!)
+        lap("layout")
         host?.documentDidChangeTitle(self)
         let syncHighlight = ProcessInfo.processInfo.environment["VIW_SNAPSHOT"] != nil
         highlight(codeBlocks, sync: syncHighlight)
