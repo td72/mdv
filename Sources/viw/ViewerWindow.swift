@@ -164,6 +164,8 @@ final class ViewerWindowController: NSWindowController, NSWindowDelegate, Docume
     @objc func togglePanePosition(_ sender: Any?) { current?.togglePanePosition() }
     @objc func togglePageMode(_ sender: Any?) { current?.togglePageMode() }
     @objc func toggleThumbnails(_ sender: Any?) { current?.toggleThumbnails() }
+    @objc func selectNextSheet(_ sender: Any?) { current?.selectSheet(offset: 1) }
+    @objc func selectPreviousSheet(_ sender: Any?) { current?.selectSheet(offset: -1) }
     @objc func selectNextTab(_ sender: Any?) { selectTab(offset: 1) }
     @objc func selectPreviousTab(_ sender: Any?) { selectTab(offset: -1) }
 

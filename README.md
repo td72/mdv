@@ -1,7 +1,7 @@
 # viw — vim-keyed viewer
 
 A small, fast, native viewer for macOS with vim keybindings. It renders GitHub Flavored Markdown, shows source
-files with syntax highlighting, CSV / TSV as a grid, PDFs and images; xlsx is planned ([#4](https://github.com/td72/viw/issues/4)). It was called `mdv` until
+files with syntax highlighting, CSV / TSV and Excel workbooks as a grid, PDFs and images. It was called `mdv` until
 v0.2; the old `~/.config/mdv/config.toml` is still read until you move it.
 
 - **Native AppKit** — `NSTextView` + TextKit 1, no WebView, no Electron. Opens in well under a second, a 4,500-line document parses, renders and lays out in ~150 ms.
@@ -39,6 +39,7 @@ viw README.md               # open a file (several files → several tabs)
 viw main.swift config.toml  # source files open as one highlighted code block
 viw data.json log.jsonl     # JSON is pretty-printed (key order kept); JSON Lines → one box per record
 viw export.csv data.tsv     # delimited text as a grid (RFC 4180 quoting, delimiter / encoding detected)
+viw book.xlsx               # Excel workbooks: the same grid, one sheet at a time (zip + XML read by viw itself)
 viw paper.pdf photo.png     # PDF (PDFKit) and images, fitted to the window
 cat notes.md | viw          # read from stdin
 open -a viw README.md       # or double-click / drag a .md onto the Dock icon
@@ -61,6 +62,16 @@ pane): numeric columns are right-aligned and sorting compares by type (numbers a
 false < true, text case-insensitively) while the cell text stays exactly as written. Quoted fields (commas, `""`, line breaks inside) follow RFC 4180; the delimiter (`,` `\t` `;`) is
 guessed from the first lines and the encoding is UTF-8 with a Shift_JIS fallback for CSVs that Excel writes.
 100k rows × 20 columns parse in about 0.1 s; past 500k rows the rest is cut off with a notice.
+
+`.xlsx` / `.xlsm` open in the same grid with a sheet bar underneath: click a sheet, or `]s` / `[s` (View › Next /
+Previous Sheet, `⌘]` / `⌘[`) to switch; the window subtitle names the sheet. viw reads the OOXML parts itself
+(no library): shared strings (rich-text runs joined, furigana `rPh` dropped), inline strings, booleans, errors and the
+cached result of formulas (nothing is recalculated). Number formats are applied in a simple form — dates and times
+(1900 and 1904 systems, `[h]` elapsed), decimals, thousands grouping, percent; `General` shows up to 10 significant
+digits and keeps integers exact; currency symbols and colors are not rendered — so the grid reads like Excel and the
+column types still infer (`1,234` and `12.5%` count as numbers). Column widths come from the sheet's `<cols>` when the
+author set them, merged cells show their top-left value, hidden sheets are listed (marked in the tooltip), chart
+sheets are skipped. Sheets parse on demand with a byte-level XML scanner: 100k rows × 12 columns take about 1 s.
 
 `.pdf` opens with PDFKit, continuous and fitted to the width: the usual keys scroll, `gg` / `G` / `50G` move through
 the document, `/` finds (all hits highlighted, `n` / `N` step through them), `+` / `-` / `=` zoom, `r` / `R` rotate,
@@ -92,6 +103,7 @@ Drop files on the window to open them in new tabs.
 | `o` | open file… (in a new tab) |
 | `gt` / `gT`, `Tab` / `Shift-Tab` | next / previous tab |
 | `3gt` | go to tab 3 |
+| `]s` / `[s` | next / previous sheet (xlsx) |
 | `+` / `-` / `=` | zoom in / out / reset (persisted) |
 | `q` | close tab (the window goes with the last one, and the app with the last window) |
 | `Esc` | clear pending count / selection |
@@ -141,10 +153,12 @@ Only flat `key = value` lines are parsed (no TOML library is linked). Unknown fo
 | `Sources/viw/ViewerWindow.swift` | window, in-window tab bar, tab switching / closing |
 | `Sources/viw/Document.swift` | `Source` / `FileKind`, the `DocumentView` protocol, and `DocumentController` (one tab: file, theme, watcher, vim commands) |
 | `Sources/viw/TextDocumentView.swift` | `DocumentView` for text: rendering, async highlighting, link handling, scrolling, find, snapshot |
-| `Sources/viw/TableDocumentView.swift` | `DocumentView` for delimited data: NSTableView grid, row cursor, search bar, TSV copy |
+| `Sources/viw/TableDocumentView.swift` | `DocumentView` for tables (CSV / xlsx): NSTableView grid, row cursor, search bar, TSV copy, sheet bar |
 | `Sources/viw/PDFDocumentView.swift` | `DocumentView` for PDFs: PDFKit, find, zoom, rotate |
 | `Sources/viw/ImageDocumentView.swift` | `DocumentView` for images: fit / zoom / rotate |
 | `Sources/viw/CSV.swift` | RFC 4180 parser with delimiter and encoding detection |
+| `Sources/viw/ZipArchive.swift` | dependency-free zip reader (central directory, stored / deflate via Compression, CRC-32) for xlsx |
+| `Sources/viw/XLSX.swift` | `Workbook`: sheets / shared strings / styles from the OOXML parts, number-format spelling, byte-level XML scanner |
 | `Sources/viw/VimKeys.swift` | `ViewerCommands` and the vim key map shared by the text and table views |
 | `Sources/viw/Toast.swift` | the short-lived "Copied …" pill |
 | `Sources/viw/SingleInstance.swift` | CFMessagePort hand-off from a second `viw` process to the running one |
@@ -156,7 +170,9 @@ Only flat `key = value` lines are parsed (no TOML library is linked). Unknown fo
 | `Sources/viw/Config.swift` | `~/.config/viw/config.toml` reader |
 | `Sources/viw/FileWatcher.swift` | kqueue file watcher that survives atomic saves |
 
-Debug helpers (environment variables, wrapped by `mise r snapshot`): `VIW_TIMING=1` prints parse / render / layout /
+Debug helpers: `viw --unzip archive.zip [entry]` lists an archive's entries or writes one to stdout; `viw --xlsx book.xlsx [N | name]`
+lists a workbook's sheets or writes one as TSV.
+Environment variables (wrapped by `mise r snapshot`): `VIW_TIMING=1` prints parse / render / layout /
 highlight-query times and scroll offsets to stderr, `VIW_SNAPSHOT=out.png` renders the whole document to a PNG and exits (`VIW_SNAPSHOT_WIDTH=700`,
 `VIW_DARK=1` to vary).
 

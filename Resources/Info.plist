@@ -62,6 +62,18 @@
             <array><string>csv</string><string>tsv</string><string>tab</string></array>
         </dict>
         <dict>
+            <key>CFBundleTypeName</key><string>Excel Workbook</string>
+            <key>CFBundleTypeRole</key><string>Viewer</string>
+            <key>LSHandlerRank</key><string>Alternate</string>
+            <key>LSItemContentTypes</key>
+            <array>
+                <string>org.openxmlformats.spreadsheetml.sheet</string>
+                <string>org.openxmlformats.spreadsheetml.sheet.macroenabled</string>
+            </array>
+            <key>CFBundleTypeExtensions</key>
+            <array><string>xlsx</string><string>xlsm</string></array>
+        </dict>
+        <dict>
             <key>CFBundleTypeName</key><string>Source Code</string>
             <key>CFBundleTypeRole</key><string>Viewer</string>
             <key>LSHandlerRank</key><string>Alternate</string>
