@@ -12,6 +12,7 @@ final class ImageDocumentView: NSObject, DocumentView {
     private var scale: CGFloat = 1
     private var fit = true
     private var turns = 0 // quarter turns clockwise
+    private let badge = StatusBadge(frame: .zero)
 
     var view: NSView { scrollView }
     var onOpenFile: ((URL) -> Void)?
@@ -37,7 +38,7 @@ final class ImageDocumentView: NSObject, DocumentView {
         imageView.imageScaling = .scaleAxesIndependently
         imageView.animates = true
         canvas.addSubview(imageView)
-        canvas.onResize = { [weak self] in self?.relayout() }
+        canvas.onResize = { [weak self] in self?.relayout() } // also re-anchors the badge
         scrollView.documentView = canvas
     }
 
@@ -89,6 +90,7 @@ final class ImageDocumentView: NSObject, DocumentView {
         canvas.setFrameSize(NSSize(width: max(size.width, clipSize.width), height: max(size.height, clipSize.height)))
         imageView.frame = NSRect(x: ((canvas.frame.width - size.width) / 2).rounded(), y: ((canvas.frame.height - size.height) / 2).rounded(),
                                  width: size.width, height: size.height)
+        badge.update(status ?? "", in: scrollView)
         onStatusChange?()
     }
 

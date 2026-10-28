@@ -26,6 +26,8 @@ protocol ViewerCommands: AnyObject {
     func switchPane()
     /// `I`: move the detail pane between the right side and the bottom.
     func togglePanePosition()
+    /// `p`: PDF page view ⇄ continuous scrolling.
+    func togglePageMode()
     func reload()
     /// `R`: rotate counter-clockwise (PDF / images; `r` rotates clockwise there instead of reloading).
     func rotateBack()
@@ -134,6 +136,7 @@ struct VimKeyMap {
         case "i": c.switchPane()       // like Enter: into the detail pane
         case ".": c.toggleDetail()     // show / hide the detail pane
         case "I": c.togglePanePosition()
+        case "p": c.togglePageMode()
         case "r": c.reload()
         case "R": c.rotateBack()
         case "o": c.openFile()

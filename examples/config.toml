@@ -7,3 +7,4 @@
 # code_scale = 0.85             # code size relative to body
 # max_width = 948               # readable column width in points
 # detail_pane = "right"       # CSV detail pane: "right" (default) or "bottom"
+# pdf_mode = "scroll"         # PDF: "scroll" (continuous, default) or "page" (one page at a time; p toggles)

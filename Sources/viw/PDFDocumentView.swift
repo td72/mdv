@@ -12,24 +12,59 @@ final class PDFDocumentView: NSObject, DocumentView, NSSearchFieldDelegate {
     private let barLabel = NSTextField(labelWithString: "FIND")
     private var matches: [PDFSelection] = []
     private var matchIndex = -1
+    private var continuous = true
+    private let badge = StatusBadge(frame: .zero)
     private var pageObserver: NSObjectProtocol?
 
     var view: NSView { root }
     var onOpenFile: ((URL) -> Void)?
+    /// Also refreshes the page badge in the corner.
     var onStatusChange: (() -> Void)?
+    /// Refresh the corner badge and tell the controller (window subtitle).
+    private func statusChanged() {
+        badge.update(status ?? "", in: root)
+        onStatusChange?()
+    }
     var commands: ViewerCommands? {
         get { pdfView.commands }
         set { pdfView.commands = newValue }
     }
 
     /// "3 / 12" for the window subtitle: the page under the middle of the view (PDFView's own
-    /// `currentPage` lags behind programmatic scrolling).
+    /// `currentPage` lags behind programmatic scrolling); "· page" in page view.
     var status: String? {
         guard let doc = pdfView.document else { return nil }
         let mid = NSPoint(x: pdfView.bounds.midX, y: pdfView.bounds.midY)
         let page = pdfView.page(for: mid, nearest: true) ?? pdfView.currentPage
         guard let page else { return nil }
-        return "\(doc.index(for: page) + 1) / \(doc.pageCount)"
+        return "\(doc.index(for: page) + 1) / \(doc.pageCount)" + (continuous ? "" : " · page")
+    }
+
+    private var pageIndex: Int {
+        guard let doc = pdfView.document, let page = pdfView.currentPage else { return 0 }
+        return doc.index(for: page)
+    }
+
+    private func go(toPage i: Int, top: Bool = true) {
+        guard let doc = pdfView.document, doc.pageCount > 0, let page = doc.page(at: max(0, min(i, doc.pageCount - 1))) else { return }
+        pdfView.go(to: page)
+        scroll(toY: top ? 0 : .greatestFiniteMagnitude)
+    }
+
+    /// `p`: one page at a time ⇄ continuous scrolling.
+    func togglePageMode() -> Bool {
+        setContinuous(!continuous)
+        Toast.show(in: root, continuous ? "Scroll view" : "Page view")
+        return true
+    }
+
+    private func setContinuous(_ on: Bool) {
+        let page = pageIndex
+        continuous = on
+        pdfView.displayMode = on ? .singlePageContinuous : .singlePage
+        if pdfView.autoScales { pdfView.autoScales = false; pdfView.autoScales = true }
+        go(toPage: page)
+        statusChanged()
     }
 
     override init() {
@@ -57,7 +92,7 @@ final class PDFDocumentView: NSObject, DocumentView, NSSearchFieldDelegate {
         layout()
 
         pageObserver = NotificationCenter.default.addObserver(forName: .PDFViewPageChanged, object: pdfView, queue: .main) { [weak self] _ in
-            self?.onStatusChange?()
+            self?.statusChanged()
         }
     }
 
@@ -87,6 +122,10 @@ final class PDFDocumentView: NSObject, DocumentView, NSSearchFieldDelegate {
             return
         }
         pdfView.document = doc
+        if continuous != theme.pdfContinuous {
+            continuous = theme.pdfContinuous
+            pdfView.displayMode = continuous ? .singlePageContinuous : .singlePage
+        }
         if wasAuto { pdfView.autoScales = true } else { pdfView.scaleFactor = savedScale }
         if preserveScroll, let page, page < doc.pageCount, let p = doc.page(at: page) { pdfView.go(to: p) }
         matches = []
@@ -95,7 +134,7 @@ final class PDFDocumentView: NSObject, DocumentView, NSSearchFieldDelegate {
         if ProcessInfo.processInfo.environment["VIW_TIMING"] != nil {
             FileHandle.standardError.write("pdf load: \(Int((CFAbsoluteTimeGetCurrent() - t0) * 1000)) ms (\(doc.pageCount) pages)\n".data(using: .utf8)!)
         }
-        onStatusChange?()
+        statusChanged()
     }
 
     // MARK: - Scrolling (through PDFView's own scroll view)
@@ -114,16 +153,33 @@ final class PDFDocumentView: NSObject, DocumentView, NSSearchFieldDelegate {
         o.y = min(max(0, y), maxY)
         c.scroll(to: o)
         sv.reflectScrolledClipView(c)
-        onStatusChange?()
+        statusChanged()
     }
     private func scroll(by dy: CGFloat) { scroll(toY: (clip?.bounds.origin.y ?? 0) + dy) }
 
-    func scrollLines(_ n: Int) { scroll(by: CGFloat(n) * lineStep) }
-    func scrollHalfPages(_ n: Int) { scroll(by: CGFloat(n) * (clip?.bounds.height ?? 0) / 2) }
-    func scrollPages(_ n: Int) { scroll(by: CGFloat(n) * max((clip?.bounds.height ?? 0) - lineStep, lineStep)) }
-    func scrollToTop() { pdfView.goToFirstPage(nil); scroll(toY: 0) }
-    func scrollToBottom() { scroll(toY: .greatestFiniteMagnitude) }
-    func scrollToPercent(_ percent: Int) { scroll(toY: maxY * CGFloat(percent) / 100) }
+    // Continuous: everything scrolls the document. Page view: `j` / `k` scroll within the page
+    // and flip at its edges, `d` / `u` / `⌃f` / `b` flip pages, `gg` / `G` / `50G` pick a page.
+    func scrollLines(_ n: Int) {
+        guard !continuous, let c = clip else { return scroll(by: CGFloat(n) * lineStep) }
+        let y = c.bounds.origin.y
+        if n > 0, y >= maxY - 0.5 { go(toPage: pageIndex + 1) }
+        else if n < 0, y <= 0.5 { go(toPage: pageIndex - 1, top: false) }
+        else { scroll(by: CGFloat(n) * lineStep) }
+    }
+    func scrollHalfPages(_ n: Int) {
+        if continuous { scroll(by: CGFloat(n) * (clip?.bounds.height ?? 0) / 2) } else { go(toPage: pageIndex + n) }
+    }
+    func scrollPages(_ n: Int) {
+        if continuous { scroll(by: CGFloat(n) * max((clip?.bounds.height ?? 0) - lineStep, lineStep)) } else { go(toPage: pageIndex + n) }
+    }
+    func scrollToTop() { go(toPage: 0) }
+    func scrollToBottom() {
+        if continuous { scroll(toY: .greatestFiniteMagnitude) } else { go(toPage: (pdfView.document?.pageCount ?? 1) - 1) }
+    }
+    func scrollToPercent(_ percent: Int) {
+        if continuous { scroll(toY: maxY * CGFloat(percent) / 100) }
+        else { go(toPage: ((pdfView.document?.pageCount ?? 1) - 1) * percent / 100) }
+    }
     func scrollHorizontal(_ n: Int) {
         guard let sv = scrollView, let c = clip, let doc = sv.documentView, doc.frame.width > c.bounds.width else { return }
         var o = c.bounds.origin
@@ -163,6 +219,7 @@ final class PDFDocumentView: NSObject, DocumentView, NSSearchFieldDelegate {
         pdfView.setCurrentSelection(m, animate: true)
         pdfView.go(to: m)
         pdfView.scrollSelectionToVisible(nil)
+        statusChanged()
     }
 
     func controlTextDidChange(_ obj: Notification) { search(searchField.stringValue) }

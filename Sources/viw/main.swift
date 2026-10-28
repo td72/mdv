@@ -133,6 +133,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         view.addItem(withTitle: "Actual Size", action: #selector(ViewerWindowController.actualSize(_:)), keyEquivalent: "0")
         view.addItem(.separator())
         view.addItem(withTitle: "Detail Pane: Right / Bottom", action: #selector(ViewerWindowController.togglePanePosition(_:)), keyEquivalent: "D")
+        view.addItem(withTitle: "PDF: Page / Scroll View", action: #selector(ViewerWindowController.togglePageMode(_:)), keyEquivalent: "P")
         view.addItem(.separator())
         view.addItem(withTitle: "Enter Full Screen", action: #selector(NSWindow.toggleFullScreen(_:)), keyEquivalent: "f")
             .keyEquivalentModifierMask = [.command, .control]

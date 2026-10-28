@@ -82,3 +82,40 @@ final class Toast: NSView {
 
     override func hitTest(_ point: NSPoint) -> NSView? { nil } // never swallow clicks
 }
+
+/// A small persistent pill in a corner of a view ("2 / 3 · page", "400 × 300 · 100%"),
+/// for state the user wants to see without looking at the title bar.
+final class StatusBadge: NSView {
+    private let label = NSTextField(labelWithString: "")
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        layer?.cornerRadius = 6
+        layer?.backgroundColor = NSColor(white: 0.15, alpha: 0.8).cgColor
+        label.textColor = .white
+        label.font = .monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
+        label.alignment = .center
+        label.usesSingleLineMode = true
+        addSubview(label)
+        autoresizingMask = [.minXMargin, .maxYMargin] // sticks to the bottom-right
+    }
+
+    @available(*, unavailable) required init?(coder: NSCoder) { fatalError() }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    /// Set the text and re-anchor to the container's bottom-right; empty text hides it.
+    func update(_ text: String, in container: NSView) {
+        isHidden = text.isEmpty
+        guard !text.isEmpty else { return }
+        label.stringValue = text
+        label.sizeToFit()
+        let size = NSSize(width: label.frame.width + 24, height: 22)
+        let b = container.bounds
+        frame = NSRect(x: (b.maxX - size.width - 12).rounded(), y: container.isFlipped ? (b.maxY - size.height - 12).rounded() : 12,
+                       width: size.width, height: size.height)
+        label.frame = bounds.insetBy(dx: 10, dy: 3)
+        if superview !== container { container.addSubview(self, positioned: .above, relativeTo: nil) }
+    }
+}

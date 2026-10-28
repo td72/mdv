@@ -13,9 +13,12 @@ struct Theme {
     var maxWidth: CGFloat = 948
     /// Where a table's detail pane goes: right of the grid (default) or below it.
     var detailPaneOnRight = true
+    /// PDFs: continuous scrolling (default) or one page at a time.
+    var pdfContinuous = true
 
     static let defaultsKey = "viw.baseSize"
     static let detailPaneKey = "viw.detailPane"
+    static let pdfModeKey = "viw.pdfMode"
 
     /// Config file first, then the persisted zoom level on top.
     static func load() -> Theme {
@@ -30,6 +33,7 @@ struct Theme {
         t.codeScale = c.codeScale ?? 0.85
         t.maxWidth = c.maxWidth ?? 948
         t.detailPaneOnRight = (UserDefaults.standard.string(forKey: Theme.detailPaneKey) ?? c.detailPane) != "bottom"
+        t.pdfContinuous = (UserDefaults.standard.string(forKey: Theme.pdfModeKey) ?? c.pdfMode) != "page"
         var saved = UserDefaults.standard.double(forKey: defaultsKey)
         if saved == 0 { saved = UserDefaults.standard.double(forKey: "mdv.baseSize") } // pre-rename key
         if saved >= 8, saved <= 48 { t.baseSize = CGFloat(saved) }
@@ -39,6 +43,7 @@ struct Theme {
     func save() {
         UserDefaults.standard.set(Double(baseSize), forKey: Theme.defaultsKey)
         UserDefaults.standard.set(detailPaneOnRight ? "right" : "bottom", forKey: Theme.detailPaneKey)
+        UserDefaults.standard.set(pdfContinuous ? "scroll" : "page", forKey: Theme.pdfModeKey)
     }
 
     private static var warned: Set<String> = []

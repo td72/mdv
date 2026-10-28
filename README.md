@@ -64,7 +64,9 @@ guessed from the first lines and the encoding is UTF-8 with a Shift_JIS fallback
 
 `.pdf` opens with PDFKit, continuous and fitted to the width: the usual keys scroll, `gg` / `G` / `50G` move through
 the document, `/` finds (all hits highlighted, `n` / `N` step through them), `+` / `-` / `=` zoom, `r` / `R` rotate,
-and the window subtitle shows the page. Images (png, jpg, gif, heic, webp, tiff, …) are fitted to the width and
+and a badge in the corner (and the window subtitle) shows the page. `p` (or View › PDF, `⌘⇧P`) switches to a page view, one page at a time:
+`j` / `k` scroll the page and flip at its edges, `d` / `u` / `Ctrl-f` / `b` flip pages, `gg` / `G` / `50G` pick a page.
+The choice is remembered; `pdf_mode = "page"` in the config makes it the default. Images (png, jpg, gif, heic, webp, tiff, …) are fitted to the width and
 centered; `+` / `-` / `=` zoom, `r` / `R` rotate, `y` copies the image. Relative links to other Markdown or source files open in the same tab. `http(s)` / `mailto` links open in the default
 browser; links to other local files are revealed in Finder rather than launched, and other URL schemes are ignored.
 Drop files on the window to open them in new tabs.
@@ -124,6 +126,7 @@ size = 16                     # base font size in points; `=` resets zoom to thi
 code_scale = 0.85             # code size relative to body
 max_width = 948               # readable column width in points
 detail_pane = "right"         # default side for the CSV detail pane: "right" or "bottom" (`I` switches at runtime)
+pdf_mode = "scroll"           # PDF: "scroll" (continuous) or "page" (one page at a time; `p` switches at runtime)
 ```
 
 Only flat `key = value` lines are parsed (no TOML library is linked). Unknown fonts fall back to the defaults with a warning on stderr.

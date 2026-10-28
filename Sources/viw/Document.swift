@@ -110,6 +110,8 @@ protocol DocumentView: AnyObject {
     /// `r` / `R`: quarter turns clockwise; views that can rotate (PDF, images) return true, and
     /// then `r` rotates instead of reloading (the file watcher and ⌘R still reload).
     func rotate(_ quarterTurns: Int) -> Bool
+    /// `p`: PDF page view ⇄ continuous; views without pages return false.
+    func togglePageMode() -> Bool
 
     /// Debug: render the whole content to a PNG (VIW_SNAPSHOT).
     func snapshot(to path: String)
@@ -120,6 +122,7 @@ extension DocumentView {
     func zoomView(_ delta: Int) -> Bool { false }
     func resetZoomView() -> Bool { false }
     func rotate(_ quarterTurns: Int) -> Bool { false }
+    func togglePageMode() -> Bool { false }
 }
 
 /// What a document needs from the window that hosts it as a tab.
@@ -250,6 +253,14 @@ final class DocumentController: NSObject, ViewerCommands {
             guard resp == .OK, let self else { return }
             self.host?.open(panel.urls)
         }
+    }
+
+    /// `p` / View › PDF Page View: one page at a time ⇄ continuous, remembered like the zoom level.
+    func togglePageMode() {
+        guard documentView.togglePageMode() else { return }
+        theme.pdfContinuous.toggle()
+        theme.save()
+        host?.documentDidChangeTitle(self)
     }
 
     /// `I` / View › Detail Pane: right ⇄ bottom, remembered like the zoom level.

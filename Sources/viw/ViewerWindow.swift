@@ -162,6 +162,7 @@ final class ViewerWindowController: NSWindowController, NSWindowDelegate, Docume
     @objc func reloadDocument(_ sender: Any?) { current?.reload() }
     @objc func revealInFinder(_ sender: Any?) { current?.revealInFinder() }
     @objc func togglePanePosition(_ sender: Any?) { current?.togglePanePosition() }
+    @objc func togglePageMode(_ sender: Any?) { current?.togglePageMode() }
     @objc func selectNextTab(_ sender: Any?) { selectTab(offset: 1) }
     @objc func selectPreviousTab(_ sender: Any?) { selectTab(offset: -1) }
 
