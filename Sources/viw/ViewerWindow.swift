@@ -118,7 +118,7 @@ final class ViewerWindowController: NSWindowController, NSWindowDelegate, Docume
         guard let window, let doc = current else { return }
         window.title = doc.title
         window.representedURL = doc.source.url
-        window.subtitle = doc.source.subtitle
+        window.subtitle = doc.subtitle
     }
 
     // MARK: - DocumentHost

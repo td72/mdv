@@ -17,6 +17,7 @@ final class TextDocumentView: NSObject, DocumentView, NSTextViewDelegate {
 
     var view: NSView { scrollView }
     var onOpenFile: ((URL) -> Void)?
+    var onStatusChange: (() -> Void)?
     /// Receiver of the vim keys typed into the text view.
     var commands: ViewerCommands? {
         get { textView.commands }
@@ -150,7 +151,7 @@ final class TextDocumentView: NSObject, DocumentView, NSTextViewDelegate {
             if records.count < all.count { truncated = (records.count, all.count) }
             attributed.append(renderer.renderCodeBlocks(records, language: "json", boxed: records.count <= 300))
             codeBlocks = renderer.codeBlocks
-        case .plain, .table: // .table has its own DocumentView; shown as text only if it ever lands here
+        case .plain, .table, .pdf, .image: // the last three have their own DocumentView; text only if they ever land here
             attributed.append(renderer.renderCode(clamp(text), language: nil))
         }
         if let t = truncated {

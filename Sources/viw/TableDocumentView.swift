@@ -51,6 +51,7 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
 
     var view: NSView { root }
     var onOpenFile: ((URL) -> Void)?
+    var onStatusChange: (() -> Void)?
     var commands: ViewerCommands? {
         get { table.commands }
         set {
@@ -916,6 +917,7 @@ final class PaneCommands: ViewerCommands {
     func switchPane() { forward.switchPane() }
     func togglePanePosition() { forward.togglePanePosition() }
     func reload() { forward.reload() }
+    func rotateBack() { forward.rotateBack() }
     func openFile() { forward.openFile() }
     func closeWindow() { forward.closeWindow() }
     func selectTab(offset: Int) { forward.selectTab(offset: offset) }
