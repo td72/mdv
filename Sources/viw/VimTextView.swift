@@ -30,6 +30,20 @@ final class VimTextView: NSTextView {
     }
 
     private var keys = VimKeyMap()
+    /// Called with true / false as the view gains / loses keyboard focus (the table's detail pane uses it).
+    var onFocusChange: ((Bool) -> Void)?
+
+    override func becomeFirstResponder() -> Bool {
+        let ok = super.becomeFirstResponder()
+        if ok { onFocusChange?(true) }
+        return ok
+    }
+
+    override func resignFirstResponder() -> Bool {
+        let ok = super.resignFirstResponder()
+        if ok { onFocusChange?(false) }
+        return ok
+    }
 
     override var acceptsFirstResponder: Bool { true }
 

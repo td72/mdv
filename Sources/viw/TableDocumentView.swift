@@ -3,12 +3,15 @@ import AppKit
 /// `DocumentView` for delimited data (CSV / TSV; xlsx later): an NSTableView with a fixed
 /// header, a row-number column, auto-sized columns, vim row navigation, an incremental
 /// search bar and TSV copy. Rows are drawn lazily, so 100k × 20 stays smooth.
-final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NSTableViewDelegate, NSSearchFieldDelegate {
+final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NSTableViewDelegate, NSSearchFieldDelegate, NSSplitViewDelegate {
     private let root = NSView(frame: NSRect(x: 0, y: 0, width: 880, height: 960))
     private let split = NSSplitView()
     private let scrollView = NSScrollView()
     private let table = VimTableView()
-    /// Bottom pane: the selected row as "column: value" lines, wrapped, selectable.
+    /// Detail pane: a title ("Row 3 / 6"), then the selected row as "column  value" lines, wrapped, selectable.
+    private let pane = NSBox()
+    private let paneTitle = NSTextField(labelWithString: "")
+    private let paneRule = NSBox()
     private let detailScroll = NSScrollView()
     private let detail = VimTextView(usingTextLayoutManager: false)
     private var detailEnabled = true
@@ -75,27 +78,42 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
         detailScroll.hasVerticalScroller = true
         detailScroll.autohidesScrollers = true
         detailScroll.borderType = .noBorder
-        detailScroll.drawsBackground = true
-        detailScroll.backgroundColor = .controlBackgroundColor
         detail.isEditable = false
         detail.isSelectable = true
         detail.isRichText = true
         detail.drawsBackground = false
         detail.maxContentWidth = .greatestFiniteMagnitude // full width, not the reading column
-        detail.minInset = NSSize(width: 12, height: 10)
+        detail.minInset = NSSize(width: 14, height: 14)
+        detail.onFocusChange = { [weak self] focused in // the title lights up while the pane has the keyboard
+            self?.paneTitle.textColor = focused ? .controlAccentColor : .secondaryLabelColor
+        }
         detail.isVerticallyResizable = true
         detail.isHorizontallyResizable = false
         detail.autoresizingMask = [.width]
         detail.textContainer?.widthTracksTextView = true
         detail.textContainer?.lineFragmentPadding = 0
         detailScroll.documentView = detail
-        detailScroll.isHidden = true
+
+        paneTitle.font = .systemFont(ofSize: 11, weight: .semibold)
+        paneTitle.textColor = .secondaryLabelColor
+        paneRule.boxType = .separator
+        pane.boxType = .custom
+        pane.borderWidth = 0
+        pane.cornerRadius = 0
+        pane.contentViewMargins = .zero
+        pane.fillColor = .controlBackgroundColor
+        detailScroll.drawsBackground = false
+        pane.contentView?.addSubview(paneTitle)
+        pane.contentView?.addSubview(paneRule)
+        pane.contentView?.addSubview(detailScroll)
+        pane.isHidden = true
 
         split.isVertical = true // grid | pane; `detail_pane = "bottom"` in the config stacks them
+        split.delegate = self
         split.dividerStyle = .thin
         split.autoresizingMask = [.width, .height]
         split.addArrangedSubview(scrollView)
-        split.addArrangedSubview(detailScroll)
+        split.addArrangedSubview(pane)
         split.setHoldingPriority(.defaultLow, forSubviewAt: 0)
         split.setHoldingPriority(.defaultHigh, forSubviewAt: 1)
         root.addSubview(split)
@@ -131,11 +149,21 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
         searchField.autoresizingMask = [.width]
         split.frame = NSRect(x: 0, y: bottom, width: b.width, height: b.height - top - bottom)
         footer.frame = NSRect(x: 0, y: 4, width: b.width, height: 16)
-        if !detailScroll.isHidden {
-            detail.frame.size.width = detailScroll.contentSize.width
+        if !pane.isHidden {
             let total = split.isVertical ? split.bounds.width : split.bounds.height
             split.setPosition(max(total * 0.3, total - detailSize), ofDividerAt: 0)
+            layoutPane()
         }
+    }
+
+    private static let paneTitleHeight: CGFloat = 30
+
+    private func layoutPane() {
+        let b = pane.bounds
+        paneTitle.frame = NSRect(x: 14, y: b.height - Self.paneTitleHeight + 8, width: b.width - 28, height: 16)
+        paneRule.frame = NSRect(x: 0, y: b.height - Self.paneTitleHeight, width: b.width, height: 1)
+        detailScroll.frame = NSRect(x: 0, y: 0, width: b.width, height: b.height - Self.paneTitleHeight)
+        detail.frame.size.width = detailScroll.contentSize.width
     }
 
     // MARK: - Loading
@@ -219,6 +247,8 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
 
     func tableViewSelectionDidChange(_ notification: Notification) { updateDetail() }
 
+    func splitViewDidResizeSubviews(_ notification: Notification) { layoutPane() }
+
     // MARK: - Detail pane
 
     /// Shown while a row is selected (and `i` has not hidden it): every column of the row in
@@ -227,9 +257,12 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
         let row = table.selectedRow
         let show = detailEnabled && row >= 0 && row < data.rows.count
         if show {
-            if !detailScroll.isHidden { // keep the size the user dragged to
-                detailSize = split.isVertical ? detailScroll.frame.width : detailScroll.frame.height
+            if !pane.isHidden { // keep the size the user dragged to
+                detailSize = split.isVertical ? pane.frame.width : pane.frame.height
             }
+            let f = NumberFormatter()
+            f.numberStyle = .decimal
+            paneTitle.stringValue = "ROW \(f.string(from: (row + 1) as NSNumber)!) / \(f.string(from: data.rows.count as NSNumber)!)"
             let text = NSMutableAttributedString()
             let keyAttrs: [NSAttributedString.Key: Any] = [.font: NSFont.boldSystemFont(ofSize: font.pointSize), .foregroundColor: NSColor.secondaryLabelColor]
             let valueAttrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.labelColor]
@@ -246,8 +279,8 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
             }
             detail.textStorage?.setAttributedString(text)
         }
-        if detailScroll.isHidden == show {
-            detailScroll.isHidden = !show
+        if pane.isHidden == show {
+            pane.isHidden = !show
             split.adjustSubviews()
             layout()
         }
@@ -527,7 +560,9 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
     }
 }
 
-/// `ViewerCommands` for the detail pane: scrolling acts on the pane, the rest is forwarded.
+/// `ViewerCommands` for the detail pane: `j` / `k` / `gg` / `G` / `50G` step through rows (the
+/// pane follows the grid's selection), `d` / `u` / `f` / `b` scroll the pane's own text, the rest
+/// is forwarded.
 final class PaneCommands: ViewerCommands {
     private let scrollView: NSScrollView
     var lineHeight: CGFloat
@@ -549,13 +584,13 @@ final class PaneCommands: ViewerCommands {
     }
     private func scroll(by dy: CGFloat) { scroll(toY: clip.bounds.origin.y + dy) }
 
-    func scrollLines(_ n: Int) { scroll(by: CGFloat(n) * lineHeight) }
+    func scrollLines(_ n: Int) { forward.scrollLines(n); scroll(toY: 0) } // next / previous record
     func scrollHalfPages(_ n: Int) { scroll(by: CGFloat(n) * clip.bounds.height / 2) }
     func scrollPages(_ n: Int) { scroll(by: CGFloat(n) * max(clip.bounds.height - lineHeight, lineHeight)) }
     func scrollHorizontal(_ n: Int) {}
-    func scrollToTop() { scroll(toY: 0) }
-    func scrollToBottom() { scroll(toY: .greatestFiniteMagnitude) }
-    func scrollToPercent(_ percent: Int) { scroll(toY: maxY * CGFloat(percent) / 100) }
+    func scrollToTop() { forward.scrollToTop() }
+    func scrollToBottom() { forward.scrollToBottom() }
+    func scrollToPercent(_ percent: Int) { forward.scrollToPercent(percent) }
 
     func find() { forward.find() }
     func findNext(reverse: Bool) { forward.findNext(reverse: reverse) }
