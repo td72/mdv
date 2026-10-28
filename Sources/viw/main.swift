@@ -152,6 +152,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         main.addItem(submenu(windowMenu, title: "Window"))
         NSApp.windowsMenu = windowMenu
 
+        let help = NSMenu(title: "Help")
+        help.addItem(withTitle: "Keyboard Shortcuts", action: #selector(ViewerWindowController.toggleHelp(_:)), keyEquivalent: "/")
+        main.addItem(submenu(help, title: "Help"))
+        NSApp.helpMenu = help
+
         NSApp.mainMenu = main
     }
 
@@ -172,15 +177,11 @@ if args.contains("-h") || args.contains("--help") {
     usage: viw [FILE ...]        open files (markdown, source code, .json, .csv / .tsv, .xlsx, .pdf, images)
            cat FILE | viw        read markdown from stdin
 
-    keys:  j/k ^e/^y  line      d/u ^d/^u  half page    f/b ^f/^b space  page
-           gg / G    top/bottom  5G  go to 50%  (counts work: 5j, 3d, ...)
-           /  find   n/N  next/prev    f  filter rows (tables)   y  copy    r  reload
-           o  open   q  close tab/window   + / -  zoom   =  reset zoom
-           gt / gT  Tab / S-Tab  next / previous tab    3gt  third tab   ⌘1-9  nth / last tab
-           ]s / [s  next / previous sheet (xlsx)    p / t / r  PDF page view / overview / rotate
+    keys (`?` in the app shows the ones for the current view):
 
-    A second `viw` hands its files to the running instance (they open as tabs).
     """)
+    print(KeyHelp.plainText(KeyHelp.common + [KeyHelp.text, KeyHelp.table, KeyHelp.sheets, KeyHelp.pdf, KeyHelp.image]))
+    print("    A second `viw` hands its files to the running instance (they open as tabs).")
     exit(0)
 }
 

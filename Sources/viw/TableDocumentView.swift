@@ -64,6 +64,7 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
     }
     var onOpenFile: ((URL) -> Void)?
     var onStatusChange: (() -> Void)?
+    var helpSections: [KeyHelp.Section] { workbook == nil ? [KeyHelp.table] : [KeyHelp.table, KeyHelp.sheets] }
     var commands: ViewerCommands? {
         get { table.commands }
         set {
@@ -1027,6 +1028,7 @@ final class PaneCommands: ViewerCommands {
     func togglePageMode() { forward.togglePageMode() }
     func toggleThumbnails() { forward.toggleThumbnails() }
     func selectSheet(offset: Int) { forward.selectSheet(offset: offset) }
+    func showHelp() { forward.showHelp() }
     func reload() { forward.reload() }
     func rotateBack() { forward.rotateBack() }
     func openFile() { forward.openFile() }

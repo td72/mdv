@@ -43,6 +43,7 @@ final class ImageDocumentView: NSObject, DocumentView {
     }
 
     func focus() { scrollView.window?.makeFirstResponder(canvas) }
+    var helpSections: [KeyHelp.Section] { [KeyHelp.image] }
 
     func load(source: Source, kind: FileKind, theme: Theme, preserveScroll: Bool) {
         guard let url = source.url, let img = NSImage(contentsOf: url) else { original = nil; image = nil; imageView.image = nil; return }

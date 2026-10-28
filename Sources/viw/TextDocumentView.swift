@@ -30,6 +30,7 @@ final class TextDocumentView: NSObject, DocumentView, NSTextViewDelegate {
     }
 
     func focus() { scrollView.window?.makeFirstResponder(textView) }
+    var helpSections: [KeyHelp.Section] { [KeyHelp.text] }
 
     // MARK: - Views
 

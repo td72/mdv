@@ -163,6 +163,7 @@ final class PDFDocumentView: NSObject, DocumentView, NSSearchFieldDelegate {
     }
 
     func focus() { root.window?.makeFirstResponder(pdfView) }
+    var helpSections: [KeyHelp.Section] { [KeyHelp.pdf] }
 
     // MARK: - Loading
 
@@ -474,6 +475,7 @@ final class OverviewCommands: ViewerCommands {
     func togglePageMode() { forward.togglePageMode() }
     func toggleThumbnails() { forward.toggleThumbnails() }
     func selectSheet(offset: Int) { forward.selectSheet(offset: offset) }
+    func showHelp() { forward.showHelp() }
     func reload() {}
     func rotateBack() {}
     func openFile() { forward.openFile() }

@@ -107,6 +107,7 @@ Drop files on the window to open them in new tabs.
 | `+` / `-` / `=` | zoom in / out / reset (persisted) |
 | `q` | close tab (the window goes with the last one, and the app with the last window) |
 | `Esc` | clear pending count / selection |
+| `?` | key help for the current view as an overlay (Help › Keyboard Shortcuts, `⌘/`); `?` / `Esc` / `q` closes it |
 
 In a table, the same keys move a cell cursor: `j` / `k` rows, `h` / `l` columns (`0` / `$` first / last column),
 `d` / `u` / `b` by (half) pages of rows, `gg` / `G` / `50G`, `/` opens an incremental search over all cells (Enter keeps the hit,
@@ -160,6 +161,7 @@ Only flat `key = value` lines are parsed (no TOML library is linked). Unknown fo
 | `Sources/viw/ZipArchive.swift` | dependency-free zip reader (central directory, stored / deflate via Compression, CRC-32) for xlsx |
 | `Sources/viw/XLSX.swift` | `Workbook`: sheets / shared strings / styles from the OOXML parts, number-format spelling, byte-level XML scanner |
 | `Sources/viw/VimKeys.swift` | `ViewerCommands` and the vim key map shared by the text and table views |
+| `Sources/viw/KeyHelp.swift` | the key bindings as data (`?` overlay, Help menu, `viw -h`) and the overlay view |
 | `Sources/viw/Toast.swift` | the short-lived "Copied …" pill |
 | `Sources/viw/SingleInstance.swift` | CFMessagePort hand-off from a second `viw` process to the running one |
 | `Sources/viw/VimTextView.swift` | read-only text view (centered column) that feeds keys to the vim key map |

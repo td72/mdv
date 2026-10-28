@@ -9,6 +9,7 @@ final class ViewerWindowController: NSWindowController, NSWindowDelegate, Docume
     private(set) var selectedIndex = -1
     private let tabBar = TabBarView()
     private let container = NSView()
+    private var help: HelpOverlay?
 
     var onClose: ((ViewerWindowController) -> Void)?
     var current: DocumentController? { documents.indices.contains(selectedIndex) ? documents[selectedIndex] : nil }
@@ -74,6 +75,7 @@ final class ViewerWindowController: NSWindowController, NSWindowDelegate, Docume
     func selectTab(index: Int) {
         guard !documents.isEmpty else { return }
         let i = max(0, min(index, documents.count - 1)) // `9gt` with fewer tabs → last, like vim
+        if help != nil { dismissHelp() }
         if i != selectedIndex {
             current?.view.removeFromSuperview()
             selectedIndex = i
@@ -138,6 +140,28 @@ final class ViewerWindowController: NSWindowController, NSWindowDelegate, Docume
         doc.view.frame = container.bounds
         container.addSubview(doc.view)
         doc.focus()
+    }
+
+    // MARK: - Help overlay (`?`, Help › Keyboard Shortcuts)
+
+    func showHelp(for doc: DocumentController) { toggleHelp(nil) }
+
+    @objc func toggleHelp(_ sender: Any?) {
+        if help != nil { dismissHelp(); return }
+        guard let content = window?.contentView, let doc = current else { return }
+        let overlay = HelpOverlay(title: "Keys — \(doc.title)", sections: KeyHelp.common, viewSections: doc.helpSections)
+        overlay.frame = content.bounds
+        overlay.onClose = { [weak self] in self?.dismissHelp() }
+        content.addSubview(overlay)
+        overlay.needsLayout = true
+        window?.makeFirstResponder(overlay)
+        help = overlay
+    }
+
+    private func dismissHelp() {
+        help?.removeFromSuperview()
+        help = nil
+        current?.focus()
     }
 
     // MARK: - NSWindowDelegate

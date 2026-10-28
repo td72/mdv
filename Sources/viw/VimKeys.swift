@@ -32,6 +32,8 @@ protocol ViewerCommands: AnyObject {
     func toggleThumbnails()
     /// `]s` / `[s`: next / previous sheet (xlsx).
     func selectSheet(offset: Int)
+    /// `?`: the key list for the current view.
+    func showHelp()
     func reload()
     /// `R`: rotate counter-clockwise (PDF / images; `r` rotates clockwise there instead of reloading).
     func rotateBack()
@@ -156,6 +158,7 @@ struct VimKeyMap {
         case "o": c.openFile()
         case "q": c.closeWindow()
         case "+", "=": chars == "=" && !flags.contains(.shift) ? c.resetZoom() : c.zoom(1)
+        case "?": c.showHelp()
         case "-": c.zoom(-1)
         case "\u{1B}": c.clearSelection() // Esc: clear pending count & selection
         default:
