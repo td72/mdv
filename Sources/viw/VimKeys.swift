@@ -10,7 +10,7 @@ protocol ViewerCommands: AnyObject {
     func scrollToBottom()
     func scrollToPercent(_ percent: Int)
     func find()
-    /// `F`: filter rows (tables).
+    /// `f`: filter rows (tables); `⌃f` / Space / PgDn page forward instead.
     func filter()
     /// `s` / `S`: sort rows / restore file order (tables).
     func sortRows()
@@ -118,10 +118,9 @@ struct VimKeyMap {
         case "d": c.scrollHalfPages(n)
         case "u": c.scrollHalfPages(-n)
         case " ": flags.contains(.shift) ? c.scrollPages(-n) : c.scrollPages(n)
-        case "f": c.scrollPages(n)
-        case "b": c.scrollPages(-n)
+        case "b": c.scrollPages(-n) // forward is ⌃f / Space / PgDn; `f` is the filter (`b` kept for symmetry with ⌃b)
         case "/": c.find()
-        case "F": c.filter()
+        case "f": c.filter()
         case "s": c.sortRows()
         case "S": c.unsortRows()
         case "n": c.findNext(reverse: false)

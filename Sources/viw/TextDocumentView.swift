@@ -336,7 +336,7 @@ final class TextDocumentView: NSObject, DocumentView, NSTextViewDelegate {
     }
 
     func find() { finderAction(.showFindInterface) }
-    func filter() { find() } // no rows to filter; `F` behaves like `/`
+    func filter() { find() } // no rows to filter; `f` behaves like `/`
     func sortRows() {}
     func unsortRows() {}
     func findNext(reverse: Bool) { finderAction(reverse ? .previousMatch : .nextMatch) }

@@ -463,7 +463,7 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
 
     func find() { openBar(.find) }
 
-    /// `F`: only rows with a cell containing the text stay visible (incremental); Enter keeps
+    /// `f`: only rows with a cell containing the text stay visible (incremental); Enter keeps
     /// the filter, Esc (here or later in the grid) shows all rows again.
     func filter() { openBar(.filter) }
 

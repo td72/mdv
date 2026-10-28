@@ -78,7 +78,7 @@ protocol DocumentView: AnyObject {
     func scrollToBottom()
     func scrollToPercent(_ percent: Int)
     func find()
-    /// `F`: filter rows, where the view has rows.
+    /// `f`: filter rows, where the view has rows.
     func filter()
     /// `s` / `S`: sort rows / restore file order, where the view has rows.
     func sortRows()

@@ -67,12 +67,13 @@ Drop files on the window to open them in new tabs.
 |-----|--------|
 | `j` / `k`, `Ctrl-e` / `Ctrl-y`, ↓ / ↑ | scroll down / up |
 | `d` / `u`, `Ctrl-d` / `Ctrl-u` | half page down / up |
-| `f` / `b`, `Ctrl-f` / `Ctrl-b`, `Space` / `Shift-Space`, PgDn / PgUp | page down / up |
+| `Ctrl-f` / `Ctrl-b`, `Space` / `Shift-Space`, PgDn / PgUp, `b` | page down / up |
 | `gg` / `G`, Home / End | top / bottom |
 | `50G` | go to 50% |
 | `5j`, `3d`, … | counts work with every motion |
 | `h` / `l`, `0` / `$` | horizontal scroll (when content is wider than the window) |
 | `/` | find (incremental find bar); `Esc` returns to the document |
+| `f` | filter rows (tables); in a text document the same as `/` |
 | `n` / `N` | next / previous match |
 | `y` | copy the selection |
 | `r` | reload |
@@ -85,7 +86,7 @@ Drop files on the window to open them in new tabs.
 
 In a table, the same keys move a row cursor: `j` / `k` rows, `d` / `u` / `f` / `b` by (half) pages of rows, `gg` / `G` /
 `50G`, `h` / `l` / `0` / `$` scroll sideways, `/` opens an incremental search over all cells (Enter keeps the hit,
-Esc goes back to where you were), `n` / `N` jump to the next / previous matching row. `F` opens a filter instead:
+Esc goes back to where you were), `n` / `N` jump to the next / previous matching row. `f` opens a filter instead:
 only rows with a cell containing the text stay (incrementally, row numbers unchanged, the footer counts the
 matches); Enter keeps the filter while you navigate, search and copy, Esc shows all rows again. Click a column
 header to sort by it (again for descending; numeric columns compare as numbers, empty cells last); `s` flips the
