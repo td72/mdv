@@ -39,10 +39,14 @@ final class VimTextView: NSTextView {
         let available = max(0, bounds.width - minInset.width * 2)
         let width = min(available, maxContentWidth)
         let inset = NSSize(width: ((bounds.width - width) / 2).rounded(.down), height: minInset.height)
+        // Inset first (display only), then the width (invalidates layout) followed at once by a
+        // full layout pass, so no display request ever finds layout holes to fill — that path is
+        // quadratic in TextKit 1 and hangs on ~100k-paragraph documents.
+        if textContainerInset != inset { textContainerInset = inset }
         if container.containerSize.width != width {
             container.containerSize = NSSize(width: width, height: CGFloat.greatestFiniteMagnitude)
+            layoutManager?.ensureLayout(for: container)
         }
-        if textContainerInset != inset { textContainerInset = inset }
     }
 
     private var count = 0

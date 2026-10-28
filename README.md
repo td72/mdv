@@ -37,6 +37,7 @@ Or just `mise r app` and drag `build/viw.app` wherever you like. `swift build -c
 ```sh
 viw README.md               # open a file (several files → several tabs)
 viw main.swift config.toml  # source files open as one highlighted code block
+viw data.json log.jsonl     # JSON is pretty-printed (key order kept); JSON Lines → one box per record
 cat notes.md | viw          # read from stdin
 open -a viw README.md       # or double-click / drag a .md onto the Dock icon
 ```
@@ -48,7 +49,9 @@ there are two or more tabs. Click a tab to select it, middle-click to close it.
 
 What a file is depends on its name: `.md` / `.markdown` / `.txt` and most extension-less files render as Markdown,
 anything with a known source extension (or a name like `Dockerfile`) as a single highlighted code block, and unknown
-extensions as plain monospace text. Relative links to other Markdown or source files open in the same tab. `http(s)` / `mailto` links open in the default
+extensions as plain monospace text. `.json` is re-indented (invalid JSON, or `.jsonc` with comments, is shown as
+written); `.jsonl` / `.ndjson` shows each record in its own box, broken lines verbatim. Very large files are cut
+off at 1 MB of displayed text with a notice, so a 100 MB dump still opens in a few seconds. Relative links to other Markdown or source files open in the same tab. `http(s)` / `mailto` links open in the default
 browser; links to other local files are revealed in Finder rather than launched, and other URL schemes are ignored.
 Drop files on the window to open them in new tabs.
 
@@ -104,6 +107,7 @@ Only flat `key = value` lines are parsed (no TOML library is linked). Unknown fo
 | `Sources/viw/VimTextView.swift` | read-only text view with the vim key handling |
 | `Sources/viw/Renderer.swift` | swift-markdown AST → `NSAttributedString` (blocks are `NSTextTable` cells) |
 | `Sources/viw/Highlighter.swift` | fence language → tree-sitter grammar, `highlights.scm` queries, capture spans |
+| `Sources/viw/JSONPretty.swift` | order-preserving JSON re-indenter (JSONSerialization only validates) |
 | `Sources/viw/Theme.swift` | fonts, sizes, dynamic colors and the syntax color palette |
 | `Sources/viw/Config.swift` | `~/.config/viw/config.toml` reader |
 | `Sources/viw/FileWatcher.swift` | kqueue file watcher that survives atomic saves |

@@ -11,6 +11,9 @@ enum Highlighter {
         let name: String
     }
 
+    /// Code longer than this (UTF-16 units) is left uncolored.
+    static let maxHighlightLength = 2_000_000
+
     /// All highlighting runs here (parsers and compiled queries are not thread-safe).
     static let queue = DispatchQueue(label: "viw.highlight", qos: .userInitiated)
     private static var parsers: [TreeSitterLanguage: Parser] = [:]
@@ -76,7 +79,10 @@ enum Highlighter {
     /// spans may override earlier ones. Empty when the language is unknown or unparsable.
     /// Call on `queue`.
     static func spans(_ code: String, info: String?) -> [Span] {
-        guard let lang = language(for: info), let tsLanguage = lang.language,
+        // tree-sitter is ~0.5 s/MB here and the result is a color per token; past this size
+        // the colors are not worth the CPU (and the memory for the spans). Big JSON dumps mostly.
+        guard code.utf16.count <= maxHighlightLength,
+              let lang = language(for: info), let tsLanguage = lang.language,
               let query = query(for: lang, tsLanguage) else { return [] }
         let parser: Parser
         if let p = parsers[lang.id] {
