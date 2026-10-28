@@ -83,9 +83,9 @@ protocol DocumentView: AnyObject {
     func copySelection()
     /// Esc: drop the selection (and any search state).
     func clearSelection()
-    /// `i`: show / hide a detail pane, where the view has one.
+    /// `.`: show / hide a detail pane, where the view has one.
     func toggleDetail()
-    /// Enter / `⌃w w`: move focus between the main view and its pane, where the view has one.
+    /// Enter / `i` / `⌃w w`: move focus between the main view and its pane, where the view has one.
     func switchPane()
 
     /// Debug: render the whole content to a PNG (VIW_SNAPSHOT).

@@ -13,9 +13,9 @@ protocol ViewerCommands: AnyObject {
     func findNext(reverse: Bool)
     func copySelection()
     func clearSelection()
-    /// `i`: show / hide the detail pane (tables: the selected row in full).
+    /// `.`: show / hide the detail pane (tables: the selected row in full).
     func toggleDetail()
-    /// Enter (or `⌃w w` / `⌃w h/j/k/l`): move the keyboard focus between the main view and its pane.
+    /// Enter / `i` (or `⌃w w` / `⌃w h/j/k/l`): move the keyboard focus between the main view and its pane.
     func switchPane()
     /// `I`: move the detail pane between the right side and the bottom.
     func togglePanePosition()
@@ -119,7 +119,8 @@ struct VimKeyMap {
         case "n": c.findNext(reverse: false)
         case "N": c.findNext(reverse: true)
         case "y": c.copySelection()
-        case "i": c.toggleDetail()
+        case "i": c.switchPane()       // like Enter: into the detail pane
+        case ".": c.toggleDetail()     // show / hide the detail pane
         case "I": c.togglePanePosition()
         case "r": c.reload()
         case "o": c.openFile()

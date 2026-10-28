@@ -17,6 +17,11 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
     private var detailEnabled = true
     private var detailSize: CGFloat = 320 // pane width (right) or height (bottom)
     private var paneCommands: PaneCommands?
+    /// One entry per column: the "name  value" line's range in the pane text, and the value's range.
+    private var fieldRanges: [(line: NSRange, value: NSRange)] = []
+    /// Field cursor in the pane (`j` / `k`); drawn only while the pane has the keyboard.
+    private var fieldIndex = 0
+    private var paneFocused = false
     private let searchBar = NSView()
     private let searchField = NSSearchField()
     private let footer = NSTextField(labelWithString: "")
@@ -40,7 +45,7 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
         set {
             table.commands = newValue
             // In the pane, j / k etc. scroll the pane itself; everything else goes to the controller.
-            paneCommands = newValue.map { PaneCommands(scrollView: detailScroll, lineHeight: table.rowHeight, forward: $0) }
+            paneCommands = newValue.map { PaneCommands(view: self, scrollView: detailScroll, lineHeight: table.rowHeight, forward: $0) }
             detail.commands = paneCommands
         }
     }
@@ -84,8 +89,11 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
         detail.drawsBackground = false
         detail.maxContentWidth = .greatestFiniteMagnitude // full width, not the reading column
         detail.minInset = NSSize(width: 14, height: 14)
-        detail.onFocusChange = { [weak self] focused in // the title lights up while the pane has the keyboard
-            self?.paneTitle.textColor = focused ? .controlAccentColor : .secondaryLabelColor
+        detail.onFocusChange = { [weak self] focused in // title lights up, field cursor appears
+            guard let self else { return }
+            self.paneFocused = focused
+            self.paneTitle.textColor = focused ? .controlAccentColor : .secondaryLabelColor
+            self.drawFieldCursor()
         }
         detail.isVerticallyResizable = true
         detail.isHorizontallyResizable = false
@@ -269,15 +277,21 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
             let style = NSMutableParagraphStyle()
             style.paragraphSpacing = font.pointSize * 0.4
             style.headIndent = 0
+            fieldRanges = []
             for (i, name) in data.header.enumerated() {
                 let value = i < data.rows[row].count ? data.rows[row][i] : ""
                 let line = NSMutableAttributedString(string: name.isEmpty ? "(column \(i + 1))" : name, attributes: keyAttrs)
                 line.append(NSAttributedString(string: "  ", attributes: keyAttrs))
+                let valueStart = line.length
                 line.append(NSAttributedString(string: value + "\n", attributes: valueAttrs))
                 line.addAttribute(.paragraphStyle, value: style, range: NSRange(location: 0, length: line.length))
+                fieldRanges.append((NSRange(location: text.length, length: line.length),
+                                    NSRange(location: text.length + valueStart, length: (value as NSString).length)))
                 text.append(line)
             }
             detail.textStorage?.setAttributedString(text)
+            fieldIndex = min(fieldIndex, max(0, fieldRanges.count - 1))
+            drawFieldCursor()
         }
         if pane.isHidden == show {
             pane.isHidden = !show
@@ -290,14 +304,41 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
         }
     }
 
+    // MARK: Field cursor (keyboard in the pane)
+
+    /// Highlight the current field's line while the pane has focus; `scroll` keeps it visible.
+    private func drawFieldCursor(scroll: Bool = false) {
+        guard let storage = detail.textStorage else { return }
+        storage.beginEditing()
+        storage.removeAttribute(.backgroundColor, range: NSRange(location: 0, length: storage.length))
+        if paneFocused, fieldRanges.indices.contains(fieldIndex) {
+            storage.addAttribute(.backgroundColor, value: NSColor.controlAccentColor.withAlphaComponent(0.2), range: fieldRanges[fieldIndex].line)
+        }
+        storage.endEditing()
+        if scroll, fieldRanges.indices.contains(fieldIndex) { detail.scrollRangeToVisible(fieldRanges[fieldIndex].line) }
+    }
+
+    /// `j` / `k` in the pane.
+    func moveField(by n: Int) { setField(fieldIndex + n) }
+
+    /// `gg` / `G` / `50G` in the pane.
+    func setField(_ i: Int) {
+        guard !fieldRanges.isEmpty else { return }
+        fieldIndex = max(0, min(i, fieldRanges.count - 1))
+        drawFieldCursor(scroll: true)
+    }
+
+    var fieldCount: Int { fieldRanges.count }
+    var fieldIndexValue: Int { fieldIndex }
+
     func toggleDetail() {
         detailEnabled.toggle()
-        if table.selectedRow < 0, detailEnabled { select(row: 0) } // `i` with nothing selected: start at the top
+        if table.selectedRow < 0, detailEnabled { select(row: 0) } // `.` with nothing selected: start at the top
         updateDetail()
         if !detailEnabled { focus() }
     }
 
-    /// Enter / ⌃w w: grid ⇄ pane (opening the pane on the first row if nothing is selected).
+    /// Enter / i / ⌃w w: grid ⇄ pane (opening the pane on the first row if nothing is selected).
     func switchPane() {
         if root.window?.firstResponder === detail {
             focus()
@@ -512,11 +553,14 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
 
     // MARK: - Selection
 
-    /// `y` / ⌘C: text selected in the detail pane if there is any, else the selected row as a
-    /// tab-separated line.
+    /// `y` / ⌘C: in the pane, the selected text if any, else the current field's value; in the
+    /// grid, the selected row as a tab-separated line.
     func copySelection() {
-        if root.window?.firstResponder === detail, detail.selectedRange().length > 0 {
-            detail.copy(nil)
+        if root.window?.firstResponder === detail {
+            if detail.selectedRange().length > 0 { detail.copy(nil); return }
+            guard table.selectedRow >= 0, fieldIndex < data.rows[table.selectedRow].count else { return }
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(data.rows[table.selectedRow][fieldIndex], forType: .string)
             return
         }
         guard table.selectedRow >= 0 else { return }
@@ -560,15 +604,17 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
     }
 }
 
-/// `ViewerCommands` for the detail pane: `j` / `k` / `gg` / `G` / `50G` step through rows (the
-/// pane follows the grid's selection), `d` / `u` / `f` / `b` scroll the pane's own text, the rest
-/// is forwarded.
+/// `ViewerCommands` for the detail pane: `j` / `k` / `gg` / `G` / `50G` move a cursor over the
+/// fields (columns) of the record, `h` / `l` go to the previous / next record, `d` / `u` / `f` / `b`
+/// scroll the pane's own text, the rest is forwarded.
 final class PaneCommands: ViewerCommands {
+    private weak var view: TableDocumentView?
     private let scrollView: NSScrollView
     var lineHeight: CGFloat
     private let forward: ViewerCommands
 
-    init(scrollView: NSScrollView, lineHeight: CGFloat, forward: ViewerCommands) {
+    init(view: TableDocumentView, scrollView: NSScrollView, lineHeight: CGFloat, forward: ViewerCommands) {
+        self.view = view
         self.scrollView = scrollView
         self.lineHeight = lineHeight
         self.forward = forward
@@ -584,13 +630,15 @@ final class PaneCommands: ViewerCommands {
     }
     private func scroll(by dy: CGFloat) { scroll(toY: clip.bounds.origin.y + dy) }
 
-    func scrollLines(_ n: Int) { forward.scrollLines(n); scroll(toY: 0) } // next / previous record
+    func scrollLines(_ n: Int) { view?.moveField(by: n) }
     func scrollHalfPages(_ n: Int) { scroll(by: CGFloat(n) * clip.bounds.height / 2) }
     func scrollPages(_ n: Int) { scroll(by: CGFloat(n) * max(clip.bounds.height - lineHeight, lineHeight)) }
-    func scrollHorizontal(_ n: Int) {}
-    func scrollToTop() { forward.scrollToTop() }
-    func scrollToBottom() { forward.scrollToBottom() }
-    func scrollToPercent(_ percent: Int) { forward.scrollToPercent(percent) }
+    func scrollHorizontal(_ n: Int) { // h / l: previous / next record (`0` / `$` are ignored)
+        if abs(n) < 1_000_000 { forward.scrollLines(n); view?.setField(view?.fieldIndexValue ?? 0) }
+    }
+    func scrollToTop() { view?.setField(0) }
+    func scrollToBottom() { view?.setField(.max) }
+    func scrollToPercent(_ percent: Int) { view?.setField(((view?.fieldCount ?? 1) - 1) * percent / 100) }
 
     func find() { forward.find() }
     func findNext(reverse: Bool) { forward.findNext(reverse: reverse) }
