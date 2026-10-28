@@ -118,6 +118,8 @@ protocol DocumentView: AnyObject {
     func toggleThumbnails() -> Bool?
     /// `]s` / `[s`: next / previous sheet of a workbook; other views ignore it.
     func selectSheet(offset: Int)
+    /// The view's own keys for the `?` overlay (after the common ones).
+    var helpSections: [KeyHelp.Section] { get }
 
     /// Debug: render the whole content to a PNG (VIW_SNAPSHOT).
     func snapshot(to path: String)
@@ -131,6 +133,7 @@ extension DocumentView {
     func togglePageMode() -> Bool { false }
     func toggleThumbnails() -> Bool? { nil }
     func selectSheet(offset: Int) {}
+    var helpSections: [KeyHelp.Section] { [] }
 }
 
 /// What a document needs from the window that hosts it as a tab.
@@ -143,6 +146,8 @@ protocol DocumentHost: AnyObject {
     func close(_ doc: DocumentController)
     func selectTab(offset: Int)
     func selectTab(index: Int)
+    /// `?`: show the key list over the window.
+    func showHelp(for doc: DocumentController)
 }
 
 /// One document = one tab: the source, its kind, the theme, the file watcher and the
@@ -276,6 +281,9 @@ final class DocumentController: NSObject, ViewerCommands {
 
     /// `]s` / `[s` / View › Next / Previous Sheet (xlsx).
     func selectSheet(offset: Int) { documentView.selectSheet(offset: offset) }
+
+    func showHelp() { host?.showHelp(for: self) }
+    var helpSections: [KeyHelp.Section] { documentView.helpSections }
 
     /// `I` / View › Detail Pane: right ⇄ bottom, remembered like the zoom level.
     func togglePanePosition() {
