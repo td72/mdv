@@ -13,6 +13,7 @@ struct Config {
     var maxWidth: CGFloat?     // readable column width in points (default 900)
     var detailPane: String?    // table detail pane: "right" (default) or "bottom"
     var pdfMode: String?       // PDF: "scroll" (continuous, default) or "page"
+    var closeEmpty: String?    // `q` / ⌘W on a window with no tabs: "window" (close it, default), "keep" (stay), "quit" (quit viw)
 
     static var path: URL {
         let env = ProcessInfo.processInfo.environment
@@ -48,6 +49,7 @@ struct Config {
             case "max_width": c.maxWidth = number(value, min: 300, max: 10_000)
             case "detail_pane": c.detailPane = ["right", "bottom"].contains(value.lowercased()) ? value.lowercased() : nil
             case "pdf_mode": c.pdfMode = ["scroll", "page"].contains(value.lowercased()) ? value.lowercased() : nil
+            case "close_empty": c.closeEmpty = ["window", "keep", "quit"].contains(value.lowercased()) ? value.lowercased() : nil
             default: break
             }
         }
