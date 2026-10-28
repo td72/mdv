@@ -116,7 +116,7 @@ protocol DocumentView: AnyObject {
     func togglePageMode() -> Bool
     /// `t`: PDF page overview; nil where there is none.
     func toggleThumbnails() -> Bool?
-    /// `]s` / `[s`: next / previous sheet of a workbook; other views ignore it.
+    /// `]` / `[`: next / previous sheet of a workbook; other views ignore it.
     func selectSheet(offset: Int)
     /// The view's own keys for the `?` overlay (after the common ones).
     var helpSections: [KeyHelp.Section] { get }
@@ -279,7 +279,7 @@ final class DocumentController: NSObject, ViewerCommands {
     /// `t` / View › PDF Thumbnails: the page overview.
     func toggleThumbnails() { _ = documentView.toggleThumbnails() }
 
-    /// `]s` / `[s` / View › Next / Previous Sheet (xlsx).
+    /// `]` / `[` / View › Next / Previous Sheet (xlsx).
     func selectSheet(offset: Int) { documentView.selectSheet(offset: offset) }
 
     func showHelp() { host?.showHelp(for: self) }

@@ -59,7 +59,7 @@ enum KeyHelp {
     ])
 
     static let sheets = Section(title: "Sheets (xlsx)", entries: [
-        Entry("]s / [s   ⌘] / ⌘[", "next / previous sheet (3]s: three ahead; wraps)"),
+        Entry("] / [   ⌘] / ⌘[", "next / previous sheet (3]: three ahead; wraps)"),
         Entry("click a sheet", "in the bar under the grid"),
     ])
 

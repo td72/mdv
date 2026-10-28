@@ -3,7 +3,7 @@ import AppKit
 /// `DocumentView` for tabular data (CSV / TSV, and xlsx one sheet at a time): an NSTableView
 /// with a fixed header, a row-number column, auto-sized columns, vim row navigation, an
 /// incremental search bar and TSV copy. Rows are drawn lazily, so 100k × 20 stays smooth.
-/// Workbooks add a sheet bar under the grid (`]s` / `[s`, or click).
+/// Workbooks add a sheet bar under the grid (`]` / `[`, or click).
 final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NSTableViewDelegate, NSSearchFieldDelegate, NSSplitViewDelegate {
     private let root = NSView(frame: NSRect(x: 0, y: 0, width: 880, height: 960))
     private let split = NSSplitView()
@@ -306,7 +306,7 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
         sheetBar.selected = sheetIndex
     }
 
-    /// `]s` / `[s`: cycle through the sheets (wrapping, like tabs).
+    /// `]` / `[`: cycle through the sheets (wrapping, like tabs).
     func selectSheet(offset: Int) {
         guard let workbook, workbook.sheets.count > 1 else { return }
         let n = workbook.sheets.count

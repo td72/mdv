@@ -30,7 +30,7 @@ protocol ViewerCommands: AnyObject {
     func togglePageMode()
     /// `t`: PDF page overview (a grid of thumbnails) ⇄ the document.
     func toggleThumbnails()
-    /// `]s` / `[s`: next / previous sheet (xlsx).
+    /// `]` / `[`: next / previous sheet (xlsx).
     func selectSheet(offset: Int)
     /// `?`: the key list for the current view.
     func showHelp()
@@ -52,7 +52,6 @@ struct VimKeyMap {
     private var count = 0
     private var pendingG = false
     private var pendingWindow = false // after ⌃w
-    private var pendingBracket: Character? // after `[` / `]`
 
     /// Returns false when the view's own `keyDown` should run (⌘ shortcuts for the menu bar).
     mutating func handle(_ event: NSEvent, _ c: ViewerCommands) -> Bool {
@@ -60,8 +59,7 @@ struct VimKeyMap {
         let chars = event.charactersIgnoringModifiers ?? ""
         let n = max(count, 1)
         let hasCount = count > 0
-        let keepsPending = (chars.first?.isNumber ?? false) || ["g", "[", "]"].contains(chars)
-        defer { if !keepsPending { count = 0; pendingG = false; pendingBracket = nil } }
+        defer { if !(chars.first?.isNumber ?? false) && chars != "g" { count = 0; pendingG = false } }
 
         if pendingWindow { // ⌃w + w / h / j / k / l / p: the only other window is the pane
             pendingWindow = false
@@ -111,14 +109,9 @@ struct VimKeyMap {
             return true
         }
 
-        if let b = pendingBracket { // ]s / [s: next / previous sheet (3]s: three ahead)
-            pendingBracket = nil
-            if chars == "s" { c.selectSheet(offset: b == "]" ? n : -n) }
-            return true
-        }
-
         switch chars {
-        case "[", "]": pendingBracket = chars.first; pendingG = false
+        case "]": c.selectSheet(offset: n)  // next / previous sheet (3]: three ahead)
+        case "[": c.selectSheet(offset: -n)
         case "0"..."9":
             if chars == "0" && !hasCount { c.scrollHorizontal(-1_000_000) } // `0` → far left
             else { count = count * 10 + Int(chars)! }
