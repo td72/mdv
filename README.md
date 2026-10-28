@@ -1,7 +1,7 @@
 # viw — vim-keyed viewer
 
-A small, fast, native viewer for macOS with vim keybindings. It renders GitHub Flavored Markdown today; source
-code, CSV, xlsx and PDF are planned ([#4](https://github.com/td72/viw/issues/4)). It was called `mdv` until
+A small, fast, native viewer for macOS with vim keybindings. It renders GitHub Flavored Markdown and shows source
+files with syntax highlighting; CSV, xlsx and PDF are planned ([#4](https://github.com/td72/viw/issues/4)). It was called `mdv` until
 v0.2; the old `~/.config/mdv/config.toml` is still read until you move it.
 
 - **Native AppKit** — `NSTextView` + TextKit 1, no WebView, no Electron. Opens in well under a second, a 4,500-line document parses, renders and lays out in ~150 ms.
@@ -36,6 +36,7 @@ Or just `mise r app` and drag `build/viw.app` wherever you like. `swift build -c
 
 ```sh
 viw README.md               # open a file (several files → several tabs)
+viw main.swift config.toml  # source files open as one highlighted code block
 cat notes.md | viw          # read from stdin
 open -a viw README.md       # or double-click / drag a .md onto the Dock icon
 ```
@@ -45,7 +46,9 @@ opens as a new tab in the existing window. Tabs are drawn by viw inside one wind
 macOS window tabs, so tiling window managers (AeroSpace, yabai) see a single window; the tab bar appears once
 there are two or more tabs. Click a tab to select it, middle-click to close it.
 
-Relative links to other `.md` files open in the same tab. `http(s)` / `mailto` links open in the default
+What a file is depends on its name: `.md` / `.markdown` / `.txt` and most extension-less files render as Markdown,
+anything with a known source extension (or a name like `Dockerfile`) as a single highlighted code block, and unknown
+extensions as plain monospace text. Relative links to other Markdown or source files open in the same tab. `http(s)` / `mailto` links open in the default
 browser; links to other local files are revealed in Finder rather than launched, and other URL schemes are ignored.
 Drop files on the window to open them in new tabs.
 
