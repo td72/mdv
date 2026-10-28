@@ -347,6 +347,7 @@ final class TextDocumentView: NSObject, DocumentView, NSTextViewDelegate {
     }
 
     func toggleDetail() {} // nothing to inspect in a text document
+    func switchPane() {}
 
     // MARK: - Debug snapshot (VIW_SNAPSHOT=/path.png renders the whole document and quits)
 

@@ -85,6 +85,8 @@ protocol DocumentView: AnyObject {
     func clearSelection()
     /// `i`: show / hide a detail pane, where the view has one.
     func toggleDetail()
+    /// Enter / `⌃w w`: move focus between the main view and its pane, where the view has one.
+    func switchPane()
 
     /// Debug: render the whole content to a PNG (VIW_SNAPSHOT).
     func snapshot(to path: String)
@@ -185,6 +187,7 @@ final class DocumentController: NSObject, ViewerCommands {
     func copySelection() { documentView.copySelection() }
     func clearSelection() { documentView.clearSelection() }
     func toggleDetail() { documentView.toggleDetail() }
+    func switchPane() { documentView.switchPane() }
 
     func reload() { load() }
     func closeWindow() { host?.close(self) }
@@ -202,6 +205,14 @@ final class DocumentController: NSObject, ViewerCommands {
             guard resp == .OK, let self else { return }
             self.host?.open(panel.urls)
         }
+    }
+
+    /// `I` / View › Detail Pane: right ⇄ bottom, remembered like the zoom level.
+    func togglePanePosition() {
+        theme.detailPaneOnRight.toggle()
+        theme.save()
+        load()
+        host?.documentDidChangeTheme(self)
     }
 
     func zoom(_ delta: Int) {

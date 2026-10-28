@@ -15,6 +15,10 @@ protocol ViewerCommands: AnyObject {
     func clearSelection()
     /// `i`: show / hide the detail pane (tables: the selected row in full).
     func toggleDetail()
+    /// Enter (or `⌃w w` / `⌃w h/j/k/l`): move the keyboard focus between the main view and its pane.
+    func switchPane()
+    /// `I`: move the detail pane between the right side and the bottom.
+    func togglePanePosition()
     func reload()
     func openFile()
     func closeWindow()
@@ -30,6 +34,7 @@ protocol ViewerCommands: AnyObject {
 struct VimKeyMap {
     private var count = 0
     private var pendingG = false
+    private var pendingWindow = false // after ⌃w
 
     /// Returns false when the view's own `keyDown` should run (⌘ shortcuts for the menu bar).
     mutating func handle(_ event: NSEvent, _ c: ViewerCommands) -> Bool {
@@ -38,6 +43,12 @@ struct VimKeyMap {
         let n = max(count, 1)
         let hasCount = count > 0
         defer { if !(chars.first?.isNumber ?? false) && chars != "g" { count = 0; pendingG = false } }
+
+        if pendingWindow { // ⌃w + w / h / j / k / l / p: the only other window is the pane
+            pendingWindow = false
+            if ["w", "h", "j", "k", "l", "p"].contains(chars) { c.switchPane() }
+            return true
+        }
 
         if flags.contains(.command) {
             // ⌘1…⌘8 → nth tab, ⌘9 → last tab (browser convention); the rest is the menu bar's.
@@ -57,6 +68,7 @@ struct VimKeyMap {
             case "f": c.scrollPages(n)
             case "b": c.scrollPages(-n)
             case "[": c.clearSelection() // like Esc
+            case "w": pendingWindow = true
             default: break
             }
             return true
@@ -74,6 +86,7 @@ struct VimKeyMap {
             case .end: c.scrollToBottom()
             case .tab: c.selectTab(offset: n) // Tab / Shift-Tab cycle through tabs
             case .backTab: c.selectTab(offset: -n)
+            case .carriageReturn, .enter: c.switchPane() // Enter: into the detail pane (Esc comes back)
             default: break
             }
             return true
@@ -107,6 +120,7 @@ struct VimKeyMap {
         case "N": c.findNext(reverse: true)
         case "y": c.copySelection()
         case "i": c.toggleDetail()
+        case "I": c.togglePanePosition()
         case "r": c.reload()
         case "o": c.openFile()
         case "q": c.closeWindow()

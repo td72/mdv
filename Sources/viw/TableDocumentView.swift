@@ -12,7 +12,8 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
     private let detailScroll = NSScrollView()
     private let detail = VimTextView(usingTextLayoutManager: false)
     private var detailEnabled = true
-    private var detailHeight: CGFloat = 180
+    private var detailSize: CGFloat = 320 // pane width (right) or height (bottom)
+    private var paneCommands: PaneCommands?
     private let searchBar = NSView()
     private let searchField = NSSearchField()
     private let footer = NSTextField(labelWithString: "")
@@ -33,7 +34,12 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
     var onOpenFile: ((URL) -> Void)?
     var commands: ViewerCommands? {
         get { table.commands }
-        set { table.commands = newValue; detail.commands = newValue } // vim keys work in the pane too
+        set {
+            table.commands = newValue
+            // In the pane, j / k etc. scroll the pane itself; everything else goes to the controller.
+            paneCommands = newValue.map { PaneCommands(scrollView: detailScroll, lineHeight: table.rowHeight, forward: $0) }
+            detail.commands = paneCommands
+        }
     }
 
     override init() {
@@ -85,7 +91,7 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
         detailScroll.documentView = detail
         detailScroll.isHidden = true
 
-        split.isVertical = false // top / bottom
+        split.isVertical = true // grid | pane; `detail_pane = "bottom"` in the config stacks them
         split.dividerStyle = .thin
         split.autoresizingMask = [.width, .height]
         split.addArrangedSubview(scrollView)
@@ -127,7 +133,8 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
         footer.frame = NSRect(x: 0, y: 4, width: b.width, height: 16)
         if !detailScroll.isHidden {
             detail.frame.size.width = detailScroll.contentSize.width
-            split.setPosition(max(80, split.bounds.height - detailHeight), ofDividerAt: 0)
+            let total = split.isVertical ? split.bounds.width : split.bounds.height
+            split.setPosition(max(total * 0.3, total - detailSize), ofDividerAt: 0)
         }
     }
 
@@ -140,6 +147,12 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
         digitFont = .monospacedDigitSystemFont(ofSize: size, weight: .regular)
         table.rowHeight = (size * 1.6).rounded()
         footer.font = .systemFont(ofSize: max(10, size - 2))
+        paneCommands?.lineHeight = table.rowHeight
+        if split.isVertical != theme.detailPaneOnRight {
+            split.isVertical = theme.detailPaneOnRight
+            detailSize = theme.detailPaneOnRight ? 320 : 180
+            split.adjustSubviews()
+        }
 
         let savedRow = table.selectedRow
         let savedOrigin = scrollView.contentView.bounds.origin
@@ -214,7 +227,9 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
         let row = table.selectedRow
         let show = detailEnabled && row >= 0 && row < data.rows.count
         if show {
-            if !detailScroll.isHidden { detailHeight = detailScroll.frame.height } // keep the user's drag
+            if !detailScroll.isHidden { // keep the size the user dragged to
+                detailSize = split.isVertical ? detailScroll.frame.width : detailScroll.frame.height
+            }
             let text = NSMutableAttributedString()
             let keyAttrs: [NSAttributedString.Key: Any] = [.font: NSFont.boldSystemFont(ofSize: font.pointSize), .foregroundColor: NSColor.secondaryLabelColor]
             let valueAttrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.labelColor]
@@ -246,6 +261,18 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
         detailEnabled.toggle()
         if table.selectedRow < 0, detailEnabled { select(row: 0) } // `i` with nothing selected: start at the top
         updateDetail()
+        if !detailEnabled { focus() }
+    }
+
+    /// Enter / ⌃w w: grid ⇄ pane (opening the pane on the first row if nothing is selected).
+    func switchPane() {
+        if root.window?.firstResponder === detail {
+            focus()
+        } else {
+            if table.selectedRow < 0 { select(row: 0) }
+            if !detailEnabled { detailEnabled = true; updateDetail() }
+            root.window?.makeFirstResponder(detail)
+        }
     }
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
@@ -465,8 +492,14 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
         NSPasteboard.general.setString(line, forType: .string)
     }
 
-    /// Esc: drop the row selection (which closes the pane) and the search highlight.
+    /// Esc: in the pane, drop its text selection and go back to the grid; in the grid, drop the
+    /// row selection (which closes the pane) and the search highlight.
     func clearSelection() {
+        if root.window?.firstResponder === detail {
+            detail.setSelectedRange(NSRange(location: 0, length: 0))
+            focus()
+            return
+        }
         table.deselectAll(nil)
         focus()
         if let m = match {
@@ -492,6 +525,52 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
             try? png.write(to: URL(fileURLWithPath: path))
         }
     }
+}
+
+/// `ViewerCommands` for the detail pane: scrolling acts on the pane, the rest is forwarded.
+final class PaneCommands: ViewerCommands {
+    private let scrollView: NSScrollView
+    var lineHeight: CGFloat
+    private let forward: ViewerCommands
+
+    init(scrollView: NSScrollView, lineHeight: CGFloat, forward: ViewerCommands) {
+        self.scrollView = scrollView
+        self.lineHeight = lineHeight
+        self.forward = forward
+    }
+
+    private var clip: NSClipView { scrollView.contentView }
+    private var maxY: CGFloat { max(0, (scrollView.documentView?.frame.height ?? 0) - clip.bounds.height) }
+    private func scroll(toY y: CGFloat) {
+        var o = clip.bounds.origin
+        o.y = min(max(0, y), maxY)
+        clip.scroll(to: o)
+        scrollView.reflectScrolledClipView(clip)
+    }
+    private func scroll(by dy: CGFloat) { scroll(toY: clip.bounds.origin.y + dy) }
+
+    func scrollLines(_ n: Int) { scroll(by: CGFloat(n) * lineHeight) }
+    func scrollHalfPages(_ n: Int) { scroll(by: CGFloat(n) * clip.bounds.height / 2) }
+    func scrollPages(_ n: Int) { scroll(by: CGFloat(n) * max(clip.bounds.height - lineHeight, lineHeight)) }
+    func scrollHorizontal(_ n: Int) {}
+    func scrollToTop() { scroll(toY: 0) }
+    func scrollToBottom() { scroll(toY: .greatestFiniteMagnitude) }
+    func scrollToPercent(_ percent: Int) { scroll(toY: maxY * CGFloat(percent) / 100) }
+
+    func find() { forward.find() }
+    func findNext(reverse: Bool) { forward.findNext(reverse: reverse) }
+    func copySelection() { forward.copySelection() }
+    func clearSelection() { forward.clearSelection() }
+    func toggleDetail() { forward.toggleDetail() }
+    func switchPane() { forward.switchPane() }
+    func togglePanePosition() { forward.togglePanePosition() }
+    func reload() { forward.reload() }
+    func openFile() { forward.openFile() }
+    func closeWindow() { forward.closeWindow() }
+    func selectTab(offset: Int) { forward.selectTab(offset: offset) }
+    func selectTab(index: Int) { forward.selectTab(index: index) }
+    func zoom(_ delta: Int) { forward.zoom(delta) }
+    func resetZoom() { forward.resetZoom() }
 }
 
 /// NSTableView that routes keys through the vim key map (same as VimTextView).

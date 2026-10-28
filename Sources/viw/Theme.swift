@@ -11,8 +11,11 @@ struct Theme {
     var codeFamily: String?
     var codeScale: CGFloat = 0.85
     var maxWidth: CGFloat = 948
+    /// Where a table's detail pane goes: right of the grid (default) or below it.
+    var detailPaneOnRight = true
 
     static let defaultsKey = "viw.baseSize"
+    static let detailPaneKey = "viw.detailPane"
 
     /// Config file first, then the persisted zoom level on top.
     static func load() -> Theme {
@@ -26,13 +29,17 @@ struct Theme {
         if let f = c.codeFont, t.codeFamily == nil { warn("code_font \"\(f)\" not found, using SF Mono") }
         t.codeScale = c.codeScale ?? 0.85
         t.maxWidth = c.maxWidth ?? 948
+        t.detailPaneOnRight = (UserDefaults.standard.string(forKey: Theme.detailPaneKey) ?? c.detailPane) != "bottom"
         var saved = UserDefaults.standard.double(forKey: defaultsKey)
         if saved == 0 { saved = UserDefaults.standard.double(forKey: "mdv.baseSize") } // pre-rename key
         if saved >= 8, saved <= 48 { t.baseSize = CGFloat(saved) }
         return t
     }
 
-    func save() { UserDefaults.standard.set(Double(baseSize), forKey: Theme.defaultsKey) }
+    func save() {
+        UserDefaults.standard.set(Double(baseSize), forKey: Theme.defaultsKey)
+        UserDefaults.standard.set(detailPaneOnRight ? "right" : "bottom", forKey: Theme.detailPaneKey)
+    }
 
     private static var warned: Set<String> = []
     private static func warn(_ msg: String) {
