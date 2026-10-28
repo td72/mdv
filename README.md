@@ -66,7 +66,9 @@ guessed from the first lines and the encoding is UTF-8 with a Shift_JIS fallback
 the document, `/` finds (all hits highlighted, `n` / `N` step through them), `+` / `-` / `=` zoom, `r` / `R` rotate,
 and a badge in the corner (and the window subtitle) shows the page. `p` (or View › PDF, `⌘⇧P`) switches to a page view, one page at a time:
 `j` / `k` scroll the page and flip at its edges, `d` / `u` / `Ctrl-f` / `b` flip pages, `gg` / `G` / `50G` pick a page.
-The choice is remembered; `pdf_mode = "page"` in the config makes it the default. Images (png, jpg, gif, heic, webp, tiff, …) are fitted to the width and
+The choice is remembered; `pdf_mode = "page"` in the config makes it the default. `t` (View › PDF: Page Overview,
+`⌘⇧T`) replaces the document with a grid of all pages: `h` / `j` / `k` / `l` / `gg` / `G` move the cursor, Enter or `i`
+(or a double-click) opens that page, Esc or `t` goes back to where you were. Images (png, jpg, gif, heic, webp, tiff, …) are fitted to the width and
 centered; `+` / `-` / `=` zoom, `r` / `R` rotate, `y` copies the image. Relative links to other Markdown or source files open in the same tab. `http(s)` / `mailto` links open in the default
 browser; links to other local files are revealed in Finder rather than launched, and other URL schemes are ignored.
 Drop files on the window to open them in new tabs.

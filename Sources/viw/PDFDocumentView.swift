@@ -14,6 +14,11 @@ final class PDFDocumentView: NSObject, DocumentView, NSSearchFieldDelegate {
     private var matchIndex = -1
     private var continuous = true
     private let badge = StatusBadge(frame: .zero)
+    private let overviewScroll = NSScrollView()
+    private let overview = PDFOverviewGrid()
+    private var overviewShown = false
+    private var overviewOrigin = 0 // the page to come back to when the overview is cancelled
+    private var overviewCommands: OverviewCommands?
     private var pageObserver: NSObjectProtocol?
 
     var view: NSView { root }
@@ -27,7 +32,11 @@ final class PDFDocumentView: NSObject, DocumentView, NSSearchFieldDelegate {
     }
     var commands: ViewerCommands? {
         get { pdfView.commands }
-        set { pdfView.commands = newValue }
+        set {
+            pdfView.commands = newValue
+            overviewCommands = newValue.map { OverviewCommands(grid: overview, forward: $0) }
+            overview.commands = overviewCommands
+        }
     }
 
     /// "3 / 12" for the window subtitle: the page under the middle of the view (PDFView's own
@@ -47,8 +56,9 @@ final class PDFDocumentView: NSObject, DocumentView, NSSearchFieldDelegate {
 
     private func go(toPage i: Int, top: Bool = true) {
         guard let doc = pdfView.document, doc.pageCount > 0, let page = doc.page(at: max(0, min(i, doc.pageCount - 1))) else { return }
-        pdfView.go(to: page)
-        scroll(toY: top ? 0 : .greatestFiniteMagnitude)
+        pdfView.go(to: page) // continuous: puts the page at the top of the view
+        if !continuous { scroll(toY: top ? 0 : .greatestFiniteMagnitude) } // page view: the page's own top / bottom
+        statusChanged()
     }
 
     /// `p`: one page at a time ⇄ continuous scrolling.
@@ -70,6 +80,8 @@ final class PDFDocumentView: NSObject, DocumentView, NSSearchFieldDelegate {
     override init() {
         super.init()
         root.autoresizingMask = [.width, .height]
+        root.postsFrameChangedNotifications = true
+        NotificationCenter.default.addObserver(forName: NSView.frameDidChangeNotification, object: root, queue: .main) { [weak self] _ in self?.layout() }
 
         barLabel.font = .systemFont(ofSize: 11, weight: .semibold)
         barLabel.textColor = .secondaryLabelColor
@@ -81,6 +93,16 @@ final class PDFDocumentView: NSObject, DocumentView, NSSearchFieldDelegate {
         searchBar.isHidden = true
         searchBar.autoresizingMask = [.width, .minYMargin]
         root.addSubview(searchBar)
+
+        overviewScroll.hasVerticalScroller = true
+        overviewScroll.autohidesScrollers = true
+        overviewScroll.borderType = .noBorder
+        overviewScroll.drawsBackground = true
+        overviewScroll.backgroundColor = .windowBackgroundColor
+        overviewScroll.documentView = overview
+        overviewScroll.isHidden = true
+        overview.onPick = { [weak self] page in self?.setOverview(false, page: page) }
+        root.addSubview(overviewScroll)
 
         pdfView.autoresizingMask = [.width, .height]
         pdfView.displayMode = .singlePageContinuous
@@ -105,6 +127,39 @@ final class PDFDocumentView: NSObject, DocumentView, NSSearchFieldDelegate {
         barLabel.frame = NSRect(x: 8, y: 9, width: 48, height: 16)
         searchField.frame = NSRect(x: 64, y: 6, width: b.width - 72, height: 22)
         pdfView.frame = NSRect(x: 0, y: 0, width: b.width, height: b.height - top)
+        pdfView.autoresizingMask = []
+        overviewScroll.frame = pdfView.frame
+        overview.relayout(width: overviewScroll.contentSize.width)
+        badge.update(overviewShown ? "" : (status ?? ""), in: root)
+    }
+
+    /// `t`: the page overview (all pages as thumbnails) ⇄ the document. Leaving it this way
+    /// (or with Esc) is a cancel: back to the page the overview was opened from; Enter / `i` /
+    /// a double-click pick the page under the cursor.
+    func toggleThumbnails() -> Bool? {
+        if overviewShown { setOverview(false, page: overviewOrigin) }
+        else { overviewOrigin = pageIndex; setOverview(true, page: pageIndex) }
+        return overviewShown
+    }
+
+    /// Show the overview with the cursor on `page`, or come back to the document at `page`.
+    private func setOverview(_ on: Bool, page: Int) {
+        overviewShown = on
+        if on {
+            overview.document = pdfView.document
+            overview.cursor = page
+            overviewScroll.isHidden = false
+            pdfView.isHidden = true
+            layout()
+            overview.scrollToCursor()
+            root.window?.makeFirstResponder(overview)
+        } else {
+            overviewScroll.isHidden = true
+            pdfView.isHidden = false
+            go(toPage: page)
+            focus()
+            statusChanged()
+        }
     }
 
     func focus() { root.window?.makeFirstResponder(pdfView) }
@@ -299,6 +354,133 @@ final class PDFDocumentView: NSObject, DocumentView, NSSearchFieldDelegate {
             try? png.write(to: URL(fileURLWithPath: path))
         }
     }
+}
+
+/// All pages as a grid of thumbnails with a cursor: `h` / `j` / `k` / `l` move, Enter / `i` open the
+/// page, Esc / `t` go back. Thumbnails are rendered on demand and cached.
+final class PDFOverviewGrid: NSView {
+    weak var commands: ViewerCommands?
+    private var keys = VimKeyMap()
+    var document: PDFDocument? { didSet { cache = [:]; relayout(width: frame.width); needsDisplay = true } }
+    var cursor = 0 { didSet { needsDisplay = true } }
+    var onPick: ((Int) -> Void)?
+    private var cache: [Int: NSImage] = [:]
+    private(set) var columns = 1
+    private let cell = NSSize(width: 180, height: 240) // thumbnail box, label below
+    private let gap: CGFloat = 16
+
+    override var isFlipped: Bool { true }
+    override var acceptsFirstResponder: Bool { true }
+    var pageCount: Int { document?.pageCount ?? 0 }
+
+    func relayout(width: CGFloat) {
+        columns = max(1, Int((width - gap) / (cell.width + gap)))
+        let rows = (pageCount + columns - 1) / columns
+        setFrameSize(NSSize(width: width, height: CGFloat(rows) * (cell.height + gap) + gap))
+        needsDisplay = true
+    }
+
+    private func rect(of index: Int) -> NSRect {
+        let col = index % columns, row = index / columns
+        let total = CGFloat(columns) * (cell.width + gap) + gap
+        let x0 = max(0, (frame.width - total) / 2)
+        return NSRect(x: x0 + gap + CGFloat(col) * (cell.width + gap), y: gap + CGFloat(row) * (cell.height + gap), width: cell.width, height: cell.height)
+    }
+
+    func scrollToCursor() {
+        guard pageCount > 0 else { return }
+        scrollToVisible(rect(of: cursor).insetBy(dx: 0, dy: -gap))
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        guard let document else { return }
+        let labelAttrs: [NSAttributedString.Key: Any] = [.font: NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .medium), .foregroundColor: NSColor.secondaryLabelColor]
+        for i in 0..<document.pageCount {
+            let r = rect(of: i)
+            guard r.intersects(dirtyRect) else { continue }
+            let box = NSRect(x: r.minX, y: r.minY, width: r.width, height: r.height - 24)
+            let image = cache[i] ?? {
+                let img = document.page(at: i)?.thumbnail(of: NSSize(width: box.width * 2, height: box.height * 2), for: .cropBox) ?? NSImage()
+                cache[i] = img
+                return img
+            }()
+            // fit the thumbnail in the box, centered
+            let s = image.size
+            let scale = s.width > 0 && s.height > 0 ? min(box.width / s.width, box.height / s.height) : 1
+            let drawn = NSRect(x: box.midX - s.width * scale / 2, y: box.midY - s.height * scale / 2, width: s.width * scale, height: s.height * scale)
+            NSColor.white.setFill()
+            drawn.fill()
+            image.draw(in: drawn, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+            NSColor.separatorColor.setStroke()
+            NSBezierPath(rect: drawn.insetBy(dx: -0.5, dy: -0.5)).stroke()
+            if i == cursor {
+                NSColor.controlAccentColor.setStroke()
+                let path = NSBezierPath(roundedRect: drawn.insetBy(dx: -4, dy: -4), xRadius: 3, yRadius: 3)
+                path.lineWidth = 3
+                path.stroke()
+            }
+            let label = "\(i + 1)" as NSString
+            let size = label.size(withAttributes: labelAttrs)
+            label.draw(at: NSPoint(x: r.midX - size.width / 2, y: r.maxY - 20), withAttributes: labelAttrs)
+        }
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        let p = convert(event.locationInWindow, from: nil)
+        for i in 0..<pageCount where rect(of: i).contains(p) {
+            cursor = i
+            if event.clickCount == 2 { onPick?(i) }
+            return
+        }
+    }
+
+    override func keyDown(with event: NSEvent) {
+        guard let c = commands, keys.handle(event, c) else { return super.keyDown(with: event) }
+    }
+
+    override func cancelOperation(_ sender: Any?) {}
+
+    func move(_ delta: Int) {
+        guard pageCount > 0 else { return }
+        cursor = max(0, min(cursor + delta, pageCount - 1))
+        scrollToCursor()
+    }
+}
+
+/// `ViewerCommands` for the overview: navigation moves the cursor, Enter / `i` opens, Esc / `t` closes.
+final class OverviewCommands: ViewerCommands {
+    private weak var grid: PDFOverviewGrid?
+    private let forward: ViewerCommands
+    init(grid: PDFOverviewGrid, forward: ViewerCommands) { self.grid = grid; self.forward = forward }
+
+    func scrollLines(_ n: Int) { grid.map { $0.move(n * $0.columns) } }
+    func scrollHalfPages(_ n: Int) { grid.map { $0.move(n * $0.columns * 3) } }
+    func scrollPages(_ n: Int) { grid.map { $0.move(n * $0.columns * 6) } }
+    func scrollHorizontal(_ n: Int) { grid.map { $0.move(abs(n) >= 1_000_000 ? (n < 0 ? -$0.cursor % $0.columns : $0.columns - 1 - $0.cursor % $0.columns) : n) } }
+    func scrollToTop() { grid.map { $0.move(-$0.pageCount) } }
+    func scrollToBottom() { grid.map { $0.move($0.pageCount) } }
+    func scrollToPercent(_ percent: Int) { grid.map { $0.move(($0.pageCount - 1) * percent / 100 - $0.cursor) } }
+    func find() {}
+    func filter() {}
+    func sortRows() {}
+    func unsortRows() {}
+    func findNext(reverse: Bool) {}
+    func copySelection() {}
+    func copyRow() {}
+    func clearSelection() { forward.toggleThumbnails() }
+    func toggleDetail() {}
+    func switchPane() { grid.map { $0.onPick?($0.cursor) } }
+    func togglePanePosition() {}
+    func togglePageMode() { forward.togglePageMode() }
+    func toggleThumbnails() { forward.toggleThumbnails() }
+    func reload() {}
+    func rotateBack() {}
+    func openFile() { forward.openFile() }
+    func closeWindow() { forward.closeWindow() }
+    func selectTab(offset: Int) { forward.selectTab(offset: offset) }
+    func selectTab(index: Int) { forward.selectTab(index: index) }
+    func zoom(_ delta: Int) {}
+    func resetZoom() {}
 }
 
 /// PDFView that routes keys through the vim key map.

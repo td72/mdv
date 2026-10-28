@@ -28,6 +28,8 @@ protocol ViewerCommands: AnyObject {
     func togglePanePosition()
     /// `p`: PDF page view ⇄ continuous scrolling.
     func togglePageMode()
+    /// `t`: PDF page overview (a grid of thumbnails) ⇄ the document.
+    func toggleThumbnails()
     func reload()
     /// `R`: rotate counter-clockwise (PDF / images; `r` rotates clockwise there instead of reloading).
     func rotateBack()
@@ -137,6 +139,7 @@ struct VimKeyMap {
         case ".": c.toggleDetail()     // show / hide the detail pane
         case "I": c.togglePanePosition()
         case "p": c.togglePageMode()
+        case "t": c.toggleThumbnails()
         case "r": c.reload()
         case "R": c.rotateBack()
         case "o": c.openFile()

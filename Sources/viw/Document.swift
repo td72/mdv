@@ -112,6 +112,8 @@ protocol DocumentView: AnyObject {
     func rotate(_ quarterTurns: Int) -> Bool
     /// `p`: PDF page view ⇄ continuous; views without pages return false.
     func togglePageMode() -> Bool
+    /// `t`: PDF page overview; nil where there is none.
+    func toggleThumbnails() -> Bool?
 
     /// Debug: render the whole content to a PNG (VIW_SNAPSHOT).
     func snapshot(to path: String)
@@ -123,6 +125,7 @@ extension DocumentView {
     func resetZoomView() -> Bool { false }
     func rotate(_ quarterTurns: Int) -> Bool { false }
     func togglePageMode() -> Bool { false }
+    func toggleThumbnails() -> Bool? { nil }
 }
 
 /// What a document needs from the window that hosts it as a tab.
@@ -262,6 +265,9 @@ final class DocumentController: NSObject, ViewerCommands {
         theme.save()
         host?.documentDidChangeTitle(self)
     }
+
+    /// `t` / View › PDF Thumbnails: the page overview.
+    func toggleThumbnails() { _ = documentView.toggleThumbnails() }
 
     /// `I` / View › Detail Pane: right ⇄ bottom, remembered like the zoom level.
     func togglePanePosition() {

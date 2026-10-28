@@ -917,6 +917,7 @@ final class PaneCommands: ViewerCommands {
     func switchPane() { forward.switchPane() }
     func togglePanePosition() { forward.togglePanePosition() }
     func togglePageMode() { forward.togglePageMode() }
+    func toggleThumbnails() { forward.toggleThumbnails() }
     func reload() { forward.reload() }
     func rotateBack() { forward.rotateBack() }
     func openFile() { forward.openFile() }
