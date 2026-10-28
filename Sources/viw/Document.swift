@@ -120,6 +120,8 @@ protocol DocumentView: AnyObject {
     func selectSheet(offset: Int)
     /// The view's own keys for the `?` overlay (after the common ones).
     var helpSections: [KeyHelp.Section] { get }
+    /// Space: play / pause (animated images); false where there is nothing to play.
+    func togglePlayback() -> Bool
 
     /// Debug: render the whole content to a PNG (VIW_SNAPSHOT).
     func snapshot(to path: String)
@@ -134,6 +136,7 @@ extension DocumentView {
     func toggleThumbnails() -> Bool? { nil }
     func selectSheet(offset: Int) {}
     var helpSections: [KeyHelp.Section] { [] }
+    func togglePlayback() -> Bool { false }
 }
 
 /// What a document needs from the window that hosts it as a tab.
@@ -283,6 +286,7 @@ final class DocumentController: NSObject, ViewerCommands {
     func selectSheet(offset: Int) { documentView.selectSheet(offset: offset) }
 
     func showHelp() { host?.showHelp(for: self) }
+    func togglePlayback() -> Bool { documentView.togglePlayback() }
     var helpSections: [KeyHelp.Section] { documentView.helpSections }
 
     /// `I` / View › Detail Pane: right ⇄ bottom, remembered like the zoom level.
