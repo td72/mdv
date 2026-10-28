@@ -55,6 +55,14 @@ let window = NSWindow(contentRect: .zero, styleMask: [.titled], backing: .buffer
 window.title = "mdv"   // native, no WebView
 ```
 
+```json
+{"name": "mdv", "version": 1.5, "tags": ["markdown", "viewer"], "native": true, "webview": null}
+```
+
+```sh
+mise r install && mdv README.md   # second mdv → new tab
+```
+
     indented code block
     second line
 

@@ -4,6 +4,8 @@ A small, fast, native GitHub Flavored Markdown viewer for macOS with vim keybind
 
 - **Native AppKit** — `NSTextView` + TextKit 1, no WebView, no Electron. Opens in well under a second, a 4,500-line document parses, renders and lays out in ~150 ms.
 - **GFM** via [swift-markdown](https://github.com/swiftlang/swift-markdown) (cmark-gfm): tables, task lists, strikethrough, fenced code, block quotes, images, autolinks, front matter.
+- **Syntax highlighting** in fenced code blocks with [tree-sitter](https://tree-sitter.github.io) grammars from
+  [CodeEditLanguages](https://github.com/CodeEditApp/CodeEditLanguages) (JSON / JSONL, YAML, TOML, shell, Swift, Python, JS / TS, Go, Rust, C / C++, SQL, HTML, CSS, … 30+ languages), in GitHub's light / dark colors. Highlighting runs off the main thread, so opening stays instant.
 - **Vim keys** for navigation, plus normal trackpad / mouse-wheel scrolling.
 - **Live reload** — the file is watched with kqueue; saves (including atomic saves) re-render while keeping the scroll position.
 - Light / dark mode follows the system. Typography follows GitHub's markdown CSS (San Francisco 16pt, SF Mono at 85%, 1.5 line height, 948pt column, centered), and fonts are configurable.
@@ -96,12 +98,13 @@ Only flat `key = value` lines are parsed (no TOML library is linked). Unknown fo
 | `Sources/mdv/SingleInstance.swift` | CFMessagePort hand-off from a second `mdv` process to the running one |
 | `Sources/mdv/VimTextView.swift` | read-only text view with the vim key handling |
 | `Sources/mdv/Renderer.swift` | swift-markdown AST → `NSAttributedString` (blocks are `NSTextTable` cells) |
-| `Sources/mdv/Theme.swift` | fonts, sizes and dynamic colors |
+| `Sources/mdv/Highlighter.swift` | fence language → tree-sitter grammar, `highlights.scm` queries, capture spans |
+| `Sources/mdv/Theme.swift` | fonts, sizes, dynamic colors and the syntax color palette |
 | `Sources/mdv/Config.swift` | `~/.config/mdv/config.toml` reader |
 | `Sources/mdv/FileWatcher.swift` | kqueue file watcher that survives atomic saves |
 
-Debug helpers (environment variables, wrapped by `mise r snapshot`): `MDV_TIMING=1` prints parse / render / layout times and
-scroll offsets to stderr, `MDV_SNAPSHOT=out.png` renders the whole document to a PNG and exits (`MDV_SNAPSHOT_WIDTH=700`,
+Debug helpers (environment variables, wrapped by `mise r snapshot`): `MDV_TIMING=1` prints parse / render / layout /
+highlight-query times and scroll offsets to stderr, `MDV_SNAPSHOT=out.png` renders the whole document to a PNG and exits (`MDV_SNAPSHOT_WIDTH=700`,
 `MDV_DARK=1` to vary).
 
 ## License
