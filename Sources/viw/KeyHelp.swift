@@ -80,6 +80,16 @@ enum KeyHelp {
         Entry("n / N", "animated: next / previous frame (pauses)"),
     ])
 
+    static let media = Section(title: "Video / audio", entries: [
+        Entry("Space", "play / pause (at the end: from the top)"),
+        Entry("j / k   d / u   ⌃f / ⌃b", "seek 5 s   30 s   1 min"),
+        Entry("h / l", "one frame back / on (pauses)"),
+        Entry("0 / $   gg / G   50G", "start / end   the middle"),
+        Entry("+ / -   =   m", "volume   100 %   mute"),
+        Entry("r / R", "rotate the video"),
+        Entry("y", "copy the file"),
+    ])
+
     /// `viw -h`.
     static func plainText(_ sections: [Section]) -> String {
         var out = ""

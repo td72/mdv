@@ -30,10 +30,15 @@ enum FileKind {
     case workbook     // xlsx / xlsm: grid view with a sheet bar
     case pdf          // PDFKit
     case image        // png / jpg / gif / heic / …
+    case video        // mp4 / mov / m4v (AVKit); mkv / webm / avi get a note
+    case audio        // m4a / mp3 / wav / aiff / flac (AVKit)
     case plain        // unknown extension: one monochrome code block
 
     static let markdownExtensions: Set<String> = ["md", "markdown", "mdown", "mkd", "mkdn", "txt"]
     static let imageExtensions: Set<String> = ["png", "jpg", "jpeg", "gif", "heic", "heif", "webp", "tiff", "tif", "bmp", "ico"]
+    /// Recognised as video; only what AVFoundation decodes plays (the rest shows a note).
+    static let videoExtensions: Set<String> = ["mp4", "m4v", "mov", "3gp", "mkv", "webm", "avi", "flv", "mpg", "mpeg", "ts"]
+    static let audioExtensions: Set<String> = ["m4a", "mp3", "wav", "aac", "aiff", "aif", "caf", "flac", "ogg", "oga", "opus"]
 
     static func of(_ url: URL) -> FileKind {
         let ext = url.pathExtension.lowercased()
@@ -44,6 +49,8 @@ enum FileKind {
         if ["xlsx", "xlsm"].contains(ext) { return .workbook }
         if ext == "pdf" { return .pdf }
         if imageExtensions.contains(ext) { return .image }
+        if videoExtensions.contains(ext) { return .video }
+        if audioExtensions.contains(ext) { return .audio }
         if ext.isEmpty {
             // "Dockerfile" & co. carry the language in the name; anything else without an extension reads as markdown.
             return Highlighter.language(for: url.lastPathComponent) != nil ? .code(url.lastPathComponent) : .markdown
@@ -120,8 +127,10 @@ protocol DocumentView: AnyObject {
     func selectSheet(offset: Int)
     /// The view's own keys for the `?` overlay (after the common ones).
     var helpSections: [KeyHelp.Section] { get }
-    /// Space: play / pause (animated images); false where there is nothing to play.
+    /// Space: play / pause (animated images, media); false where there is nothing to play.
     func togglePlayback() -> Bool
+    /// `m`: mute / unmute (media).
+    func toggleMute()
 
     /// Debug: render the whole content to a PNG (VIW_SNAPSHOT).
     func snapshot(to path: String)
@@ -137,6 +146,7 @@ extension DocumentView {
     func selectSheet(offset: Int) {}
     var helpSections: [KeyHelp.Section] { [] }
     func togglePlayback() -> Bool { false }
+    func toggleMute() {}
 }
 
 /// What a document needs from the window that hosts it as a tab.
@@ -194,6 +204,7 @@ final class DocumentController: NSObject, ViewerCommands {
         case .table, .workbook: return TableDocumentView.self
         case .pdf: return PDFDocumentView.self
         case .image: return ImageDocumentView.self
+        case .video, .audio: return MediaDocumentView.self
         default: return TextDocumentView.self
         }
     }
@@ -287,6 +298,7 @@ final class DocumentController: NSObject, ViewerCommands {
 
     func showHelp() { host?.showHelp(for: self) }
     func togglePlayback() -> Bool { documentView.togglePlayback() }
+    func toggleMute() { documentView.toggleMute() }
     var helpSections: [KeyHelp.Section] { documentView.helpSections }
 
     /// `I` / View › Detail Pane: right ⇄ bottom, remembered like the zoom level.
