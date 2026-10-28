@@ -10,11 +10,16 @@ let package = Package(
             url: "https://github.com/swiftlang/swift-markdown.git",
             revision: "bc55d614bc8608d74cdc18d3aa6413bd8661e444"
         ),
+        // tree-sitter grammars + highlight queries (prebuilt xcframework) for code blocks.
+        .package(url: "https://github.com/CodeEditApp/CodeEditLanguages.git", from: "0.1.21"),
     ],
     targets: [
         .executableTarget(
             name: "mdv",
-            dependencies: [.product(name: "Markdown", package: "swift-markdown")],
+            dependencies: [
+                .product(name: "Markdown", package: "swift-markdown"),
+                .product(name: "CodeEditLanguages", package: "CodeEditLanguages"),
+            ],
             path: "Sources/mdv"
         ),
     ]

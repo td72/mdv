@@ -39,6 +39,8 @@ final class DocumentController: NSObject, NSTextViewDelegate, ViewerCommands {
     private let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 880, height: 960))
     private let textView = VimTextView(usingTextLayoutManager: false)
     private var watcher: FileWatcher?
+    /// Bumped on every load so a highlight pass for an older rendering is dropped.
+    private var highlightGeneration = 0
     weak var host: DocumentHost?
 
     var view: NSView { scrollView }
@@ -132,12 +134,16 @@ final class DocumentController: NSObject, NSTextViewDelegate, ViewerCommands {
         let renderer = MarkdownRenderer(theme: theme, baseURL: baseURL)
         let (front, body) = splitFrontMatter(markdown)
         let attributed = NSMutableAttributedString()
+        var codeBlocks: [MarkdownRenderer.CodeBlockRef] = []
         if let front {
             attributed.append(renderer.render(Document(parsing: "```yaml\n\(front)\n```\n")))
+            codeBlocks += renderer.codeBlocks
         }
         let document = Document(parsing: body)
         lap("parse")
+        let offset = attributed.length
         attributed.append(renderer.render(document))
+        codeBlocks += renderer.codeBlocks.map { var r = $0; r.range.location += offset; return r }
         lap("render")
 
         textView.textStorage?.setAttributedString(attributed)
@@ -147,10 +153,50 @@ final class DocumentController: NSObject, NSTextViewDelegate, ViewerCommands {
             lap("layout")
         }
         host?.documentDidChangeTitle(self)
+        let syncHighlight = ProcessInfo.processInfo.environment["MDV_SNAPSHOT"] != nil
+        highlight(codeBlocks, sync: syncHighlight)
+        if timing, syncHighlight, !codeBlocks.isEmpty { lap("highlight (sync)") }
 
         if preserveScroll, savedOrigin.y > 0 {
             textView.layoutManager?.ensureLayout(for: textView.textContainer!)
             scroll(toY: savedOrigin.y)
+        }
+    }
+
+    /// Syntax-highlight fenced code blocks. The tree-sitter work (compiling a grammar's query
+    /// the first time can take ~100 ms for Swift) runs off the main thread so the document
+    /// appears immediately; the colors land a moment later. Only foreground colors change,
+    /// so layout and the scroll position are untouched.
+    private func highlight(_ blocks: [MarkdownRenderer.CodeBlockRef], sync: Bool) {
+        highlightGeneration += 1
+        let generation = highlightGeneration
+        guard !blocks.isEmpty else { return }
+        let theme = self.theme
+        let compute = { () -> [(NSRange, NSColor)] in
+            blocks.flatMap { block -> [(NSRange, NSColor)] in
+                Highlighter.spans(block.code, info: block.language).compactMap { span in
+                    guard let color = theme.codeColor(for: span.name) else { return nil }
+                    let r = NSIntersectionRange(
+                        NSRange(location: block.range.location + span.range.location, length: span.range.length), block.range)
+                    return r.length > 0 ? (r, color) : nil
+                }
+            }
+        }
+        let apply = { [weak self] (runs: [(NSRange, NSColor)]) in
+            guard let self, generation == self.highlightGeneration, let storage = self.textView.textStorage else { return }
+            storage.beginEditing()
+            for (range, color) in runs where NSMaxRange(range) <= storage.length {
+                storage.addAttribute(.foregroundColor, value: color, range: range)
+            }
+            storage.endEditing()
+        }
+        if sync {
+            apply(Highlighter.queue.sync(execute: compute))
+        } else {
+            Highlighter.queue.async {
+                let runs = compute()
+                DispatchQueue.main.async { apply(runs) }
+            }
         }
     }
 
