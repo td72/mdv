@@ -41,6 +41,7 @@ viw data.json log.jsonl     # JSON is pretty-printed (key order kept); JSON Line
 viw export.csv data.tsv     # delimited text as a grid (RFC 4180 quoting, delimiter / encoding detected)
 viw book.xlsx               # Excel workbooks: the same grid, one sheet at a time (zip + XML read by viw itself)
 viw paper.pdf photo.png     # PDF (PDFKit) and images, fitted to the window
+viw clip.mp4 talk.m4a       # video and audio (AVKit): whatever macOS decodes plays, with vim keys for transport
 cat notes.md | viw          # read from stdin
 open -a viw README.md       # or double-click / drag a .md onto the Dock icon
 ```
@@ -92,7 +93,16 @@ The choice is remembered; `pdf_mode = "page"` in the config makes it the default
 (or a double-click) opens that page, Esc or `t` goes back to where you were. Images (png, jpg, gif, heic, webp, tiff, …) are fitted to the width and
 centered; `+` / `-` / `=` zoom, `r` / `R` rotate, `y` copies the image. Animated GIF / WebP / APNG / HEICS play frame by
 frame (so rotation and zoom apply to every frame) with the frame number in the badge: Space pauses and resumes, `n` / `N`
-step one frame; a hidden tab stops the timer. Relative links to other Markdown or source files open in the same tab. `http(s)` / `mailto` links open in the default
+step one frame; a hidden tab stops the timer.
+
+`.mp4` / `.mov` / `.m4v` and `.m4a` / `.mp3` / `.wav` / `.aiff` / `.flac` open in an AVKit player: whatever macOS can decode
+plays (H.264 / HEVC, AAC / MP3 / …); `.mkv` / `.webm` / `.avi` / `.ogg` are recognised but get a note saying another player is
+needed. A file opens paused, like QuickTime Player; Space plays / pauses (at the end: from the top), `j` / `k` seek 5 s, `d` / `u` 30 s, `Ctrl-f` / `Ctrl-b` a minute,
+`h` / `l` step a frame (pausing), `0` / `$` / `gg` / `G` / `50G` jump, `+` / `-` / `=` set the volume, `m` mutes, `r` / `R`
+rotate the video, `y` copies the file. The badge and the subtitle show `time / length`; a hidden tab pauses. The mouse
+gets the usual inline scrubber.
+
+Relative links to other Markdown or source files open in the same tab. `http(s)` / `mailto` links open in the default
 browser; links to other local files are revealed in Finder rather than launched, and other URL schemes are ignored.
 Drop files on the window to open them in new tabs.
 
@@ -121,6 +131,7 @@ Drop files on the window to open them in new tabs.
 | `Esc` | clear pending count / selection |
 | `?` | key help for the current view as an overlay (Help › Keyboard Shortcuts, `⌘/`); `?` / `Esc` / `q` closes it |
 | `Space`, `n` / `N` | animated images: pause / play, step a frame |
+| `Space`, `j` / `k`, `d` / `u`, `h` / `l`, `m` | video / audio: play / pause, seek 5 s / 30 s, step a frame, mute (`+` / `-` volume) |
 
 In a table, the same keys move a cell cursor: `j` / `k` rows, `h` / `l` columns (`0` / `$` first / last column),
 `d` / `u` / `b` by (half) pages of rows, `gg` / `G` / `50G`, `/` opens an incremental search over all cells (Enter keeps the hit,
@@ -171,6 +182,7 @@ Only flat `key = value` lines are parsed (no TOML library is linked). Unknown fo
 | `Sources/viw/TableDocumentView.swift` | `DocumentView` for tables (CSV / xlsx): NSTableView grid, row cursor, search bar, TSV copy, sheet bar |
 | `Sources/viw/PDFDocumentView.swift` | `DocumentView` for PDFs: PDFKit, find, zoom, rotate |
 | `Sources/viw/ImageDocumentView.swift` | `DocumentView` for images: fit / zoom / rotate, ImageIO frame playback for animated images |
+| `Sources/viw/MediaDocumentView.swift` | `DocumentView` for video / audio: AVPlayerView with vim transport keys |
 | `Sources/viw/CSV.swift` | RFC 4180 parser with delimiter and encoding detection |
 | `Sources/viw/ZipArchive.swift` | dependency-free zip reader (central directory, stored / deflate via Compression, CRC-32) for xlsx |
 | `Sources/viw/XLSX.swift` | `Workbook`: sheets / shared strings / styles from the OOXML parts, number-format spelling, byte-level XML scanner |

@@ -74,6 +74,24 @@
             <array><string>xlsx</string><string>xlsm</string></array>
         </dict>
         <dict>
+            <key>CFBundleTypeName</key><string>Video</string>
+            <key>CFBundleTypeRole</key><string>Viewer</string>
+            <key>LSHandlerRank</key><string>Alternate</string>
+            <key>LSItemContentTypes</key>
+            <array><string>public.movie</string><string>public.mpeg-4</string><string>com.apple.quicktime-movie</string></array>
+            <key>CFBundleTypeExtensions</key>
+            <array><string>mp4</string><string>m4v</string><string>mov</string><string>3gp</string></array>
+        </dict>
+        <dict>
+            <key>CFBundleTypeName</key><string>Audio</string>
+            <key>CFBundleTypeRole</key><string>Viewer</string>
+            <key>LSHandlerRank</key><string>Alternate</string>
+            <key>LSItemContentTypes</key>
+            <array><string>public.audio</string></array>
+            <key>CFBundleTypeExtensions</key>
+            <array><string>m4a</string><string>mp3</string><string>wav</string><string>aac</string><string>aiff</string><string>aif</string><string>caf</string><string>flac</string></array>
+        </dict>
+        <dict>
             <key>CFBundleTypeName</key><string>Source Code</string>
             <key>CFBundleTypeRole</key><string>Viewer</string>
             <key>LSHandlerRank</key><string>Alternate</string>

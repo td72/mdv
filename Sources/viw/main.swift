@@ -183,14 +183,14 @@ if args.contains("-h") || args.contains("--help") {
     print("""
     viw — vim-keyed viewer (markdown, code, JSON, CSV, xlsx, PDF, images)
 
-    usage: viw [FILE ...]        open files (markdown, source code, .json, .csv / .tsv, .xlsx, .pdf, images); none: an empty window
+    usage: viw [FILE ...]        open files (markdown, source code, .json, .csv / .tsv, .xlsx, .pdf, images, video / audio); none: an empty window
            cat FILE | viw        read markdown from stdin
            viw --set-default     make viw the default app for its file types (or: --set-default md csv)
 
     keys (`?` in the app shows the ones for the current view):
 
     """)
-    print(KeyHelp.plainText(KeyHelp.common + [KeyHelp.text, KeyHelp.table, KeyHelp.sheets, KeyHelp.pdf, KeyHelp.image]))
+    print(KeyHelp.plainText(KeyHelp.common + [KeyHelp.text, KeyHelp.table, KeyHelp.sheets, KeyHelp.pdf, KeyHelp.image, KeyHelp.media]))
     print("    A second `viw` hands its files to the running instance (they open as tabs).")
     exit(0)
 }

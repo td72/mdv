@@ -1030,6 +1030,7 @@ final class PaneCommands: ViewerCommands {
     func selectSheet(offset: Int) { forward.selectSheet(offset: offset) }
     func showHelp() { forward.showHelp() }
     func togglePlayback() -> Bool { forward.togglePlayback() }
+    func toggleMute() { forward.toggleMute() }
     func reload() { forward.reload() }
     func rotateBack() { forward.rotateBack() }
     func openFile() { forward.openFile() }
