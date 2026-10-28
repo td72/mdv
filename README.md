@@ -73,7 +73,7 @@ false < true, text case-insensitively) while the cell text stays exactly as writ
 guessed from the first lines and the encoding is UTF-8 with a Shift_JIS fallback for CSVs that Excel writes.
 100k rows × 20 columns parse in about 0.1 s; past 500k rows the rest is cut off with a notice.
 
-`.xlsx` / `.xlsm` open in the same grid with a sheet bar underneath: click a sheet, or `]s` / `[s` (View › Next /
+`.xlsx` / `.xlsm` open in the same grid with a sheet bar underneath: click a sheet, or `]` / `[` (View › Next /
 Previous Sheet, `⌘]` / `⌘[`) to switch; the window subtitle names the sheet. viw reads the OOXML parts itself
 (no library): shared strings (rich-text runs joined, furigana `rPh` dropped), inline strings, booleans, errors and the
 cached result of formulas (nothing is recalculated). Number formats are applied in a simple form — dates and times
@@ -113,7 +113,7 @@ Drop files on the window to open them in new tabs.
 | `o` | open file… (in a new tab) |
 | `gt` / `gT`, `Tab` / `Shift-Tab` | next / previous tab |
 | `3gt` | go to tab 3 |
-| `]s` / `[s` | next / previous sheet (xlsx) |
+| `]` / `[` | next / previous sheet (xlsx; `3]` three ahead) |
 | `+` / `-` / `=` | zoom in / out / reset (persisted) |
 | `q` | close the tab; the last one leaves an empty window, and `q` there closes the window (the app quits with its last window) |
 | `Esc` | clear pending count / selection |
