@@ -35,7 +35,7 @@ enum KeyHelp {
             Entry("gt / gT   Tab / ⇧Tab", "next / previous tab"),
             Entry("3gt   ⌘1 – ⌘9", "tab 3   tab n (⌘9: the last)"),
             Entry("o", "open a file in a new tab"),
-            Entry("q", "close the tab (the last one closes the window)"),
+            Entry("q", "close the tab (the last one leaves the window empty; q again closes it)"),
             Entry("r", "reload (PDF / images: rotate instead)"),
             Entry("+ / -   =", "zoom in / out   reset"),
             Entry("?   ⌘/", "this help (?, Esc or q closes it)"),

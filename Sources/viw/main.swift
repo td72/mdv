@@ -22,9 +22,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         for url in cliFiles { open(url) }
         if let stdinText { show(.text(stdinText, title: "stdin")) }
-        // Finder/`open` delivers URLs via application(_:open:) around launch; wait one tick.
+        // Finder/`open` delivers URLs via application(_:open:) around launch; wait one tick,
+        // then start with an empty window if nothing came.
         DispatchQueue.main.async { [self] in
-            if !openedAny { showOpenPanel() }
+            if !openedAny { showEmptyWindow() }
         }
         NSApp.activate(ignoringOtherApps: true)
 
@@ -43,7 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        if !flag { showOpenPanel() }
+        if !flag { showEmptyWindow() }
         return true
     }
 
@@ -54,7 +55,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         for path in req.files { open(URL(fileURLWithPath: path)) }
         if let text = req.stdin { show(.text(text, title: "stdin")) }
         NSApp.activate(ignoringOtherApps: true)
-        if req.files.isEmpty, req.stdin == nil { showOpenPanel() }
+        if req.files.isEmpty, req.stdin == nil, tabHost() == nil { showEmptyWindow() } // a bare `viw`: just come to the front
     }
 
     /// The first document gets a window; later ones join it as tabs (the key window if
@@ -66,6 +67,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             host.window?.makeKeyAndOrderFront(nil)
             return
         }
+        newWindow(source)
+    }
+
+    /// File › New Window, a bare `viw`, Dock click with no window: a window with no tabs.
+    func showEmptyWindow() { newWindow(nil) }
+
+    private func newWindow(_ source: Source?) {
         let c = ViewerWindowController(source: source)
         c.onClose = { [weak self] c in self?.controllers.removeAll { $0 === c } }
         controllers.append(c)
@@ -87,8 +95,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.allowedContentTypes = [.plainText, .text, .data]
         if panel.runModal() == .OK {
             for u in panel.urls { open(u) }
-        } else if controllers.isEmpty {
-            NSApp.terminate(nil)
         }
     }
 
@@ -105,12 +111,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         main.addItem(submenu(appMenu, title: "viw"))
 
         let file = NSMenu(title: "File")
+        file.addItem(withTitle: "New Window", action: #selector(ViewerWindowController.newWindow(_:)), keyEquivalent: "n")
         file.addItem(withTitle: "New Tab…", action: #selector(showOpenPanel), keyEquivalent: "t")
         file.addItem(withTitle: "Open…", action: #selector(showOpenPanel), keyEquivalent: "o")
         file.addItem(withTitle: "Reload", action: #selector(ViewerWindowController.reloadDocument(_:)), keyEquivalent: "r")
         file.addItem(withTitle: "Reveal in Finder", action: #selector(ViewerWindowController.revealInFinder(_:)), keyEquivalent: "R")
         file.addItem(.separator())
-        file.addItem(withTitle: "Close Tab", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        file.addItem(withTitle: "Close Tab", action: #selector(ViewerWindowController.closeTab(_:)), keyEquivalent: "w")
+        file.addItem(withTitle: "Close Window", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "W")
         main.addItem(submenu(file, title: "File"))
 
         let edit = NSMenu(title: "Edit")
@@ -175,7 +183,7 @@ if args.contains("-h") || args.contains("--help") {
     print("""
     viw — vim-keyed viewer (markdown, code, JSON, CSV, xlsx, PDF, images)
 
-    usage: viw [FILE ...]        open files (markdown, source code, .json, .csv / .tsv, .xlsx, .pdf, images)
+    usage: viw [FILE ...]        open files (markdown, source code, .json, .csv / .tsv, .xlsx, .pdf, images); none: an empty window
            cat FILE | viw        read markdown from stdin
            viw --set-default     make viw the default app for its file types (or: --set-default md csv)
 

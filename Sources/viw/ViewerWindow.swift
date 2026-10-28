@@ -9,12 +9,14 @@ final class ViewerWindowController: NSWindowController, NSWindowDelegate, Docume
     private(set) var selectedIndex = -1
     private let tabBar = TabBarView()
     private let container = NSView()
+    private let empty = EmptyView()
     private var help: HelpOverlay?
 
     var onClose: ((ViewerWindowController) -> Void)?
     var current: DocumentController? { documents.indices.contains(selectedIndex) ? documents[selectedIndex] : nil }
 
-    init(source: Source) {
+    /// `source` nil: an empty window (drop a file, `o`, or `viw FILE` fills it).
+    init(source: Source?) {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 880, height: 960),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
@@ -27,7 +29,7 @@ final class ViewerWindowController: NSWindowController, NSWindowDelegate, Docume
         buildViews()
         window.setFrameAutosaveName("viw.viewer")
         if !window.setFrameUsingName("viw.viewer") { window.center() }
-        addTab(source)
+        if let source { addTab(source) } else { showEmpty() }
     }
 
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError() }
@@ -45,6 +47,10 @@ final class ViewerWindowController: NSWindowController, NSWindowDelegate, Docume
             self.close(self.documents[i])
         }
         container.autoresizingMask = [.width, .height]
+        empty.autoresizingMask = [.width, .height]
+        empty.onOpen = { AppDelegate.shared?.showOpenPanel() }
+        empty.onHelp = { [weak self] in self?.toggleHelp(nil) }
+        empty.onClose = { [weak self] in self?.window?.performClose(nil) }
         content.addSubview(container)
         content.addSubview(tabBar)
         layoutChrome()
@@ -63,11 +69,22 @@ final class ViewerWindowController: NSWindowController, NSWindowDelegate, Docume
         tabBar.selected = selectedIndex
     }
 
+    /// No tabs: the hint view takes the content and the keyboard.
+    private func showEmpty() {
+        selectedIndex = -1
+        empty.frame = container.bounds
+        container.addSubview(empty)
+        layoutChrome()
+        updateTitle()
+        window?.makeFirstResponder(empty)
+    }
+
     // MARK: - Tabs
 
     func addTab(_ source: Source) {
         let doc = DocumentController(source: source)
         doc.host = self
+        if documents.isEmpty { empty.removeFromSuperview() }
         documents.append(doc)
         selectTab(index: documents.count - 1)
     }
@@ -94,16 +111,16 @@ final class ViewerWindowController: NSWindowController, NSWindowDelegate, Docume
         selectTab(index: ((selectedIndex + offset) % n + n) % n)
     }
 
+    /// Close a tab; the last one leaves the window empty (`q` there closes the window).
     func close(_ doc: DocumentController) {
         guard let i = documents.firstIndex(where: { $0 === doc }) else { return }
-        if documents.count == 1 {
-            window?.close()
-            return
-        }
         doc.stop()
         doc.view.removeFromSuperview()
         documents.remove(at: i)
-        if i == selectedIndex {
+        if documents.isEmpty {
+            if help != nil { dismissHelp() }
+            showEmpty()
+        } else if i == selectedIndex {
             selectedIndex = -1
             selectTab(index: i) // the tab to the right takes over (clamped to last)
         } else {
@@ -117,7 +134,13 @@ final class ViewerWindowController: NSWindowController, NSWindowDelegate, Docume
     }
 
     private func updateTitle() {
-        guard let window, let doc = current else { return }
+        guard let window else { return }
+        guard let doc = current else {
+            window.title = "viw"
+            window.representedURL = nil
+            window.subtitle = ""
+            return
+        }
         window.title = doc.title
         window.representedURL = doc.source.url
         window.subtitle = doc.subtitle
@@ -148,8 +171,8 @@ final class ViewerWindowController: NSWindowController, NSWindowDelegate, Docume
 
     @objc func toggleHelp(_ sender: Any?) {
         if help != nil { dismissHelp(); return }
-        guard let content = window?.contentView, let doc = current else { return }
-        let overlay = HelpOverlay(title: "Keys — \(doc.title)", sections: KeyHelp.common, viewSections: doc.helpSections)
+        guard let content = window?.contentView else { return }
+        let overlay = HelpOverlay(title: "Keys — \(current?.title ?? "viw")", sections: KeyHelp.common, viewSections: current?.helpSections ?? [])
         overlay.frame = content.bounds
         overlay.onClose = { [weak self] in self?.dismissHelp() }
         content.addSubview(overlay)
@@ -161,16 +184,15 @@ final class ViewerWindowController: NSWindowController, NSWindowDelegate, Docume
     private func dismissHelp() {
         help?.removeFromSuperview()
         help = nil
-        current?.focus()
+        if let current { current.focus() } else { window?.makeFirstResponder(empty) }
     }
 
     // MARK: - NSWindowDelegate
 
-    /// ⌘W / `q` close the current tab; the window goes with the last one.
-    func windowShouldClose(_ sender: NSWindow) -> Bool {
-        guard documents.count > 1, let doc = current else { return true }
-        close(doc)
-        return false
+    /// ⌘W / `q`: close the tab, or the window when it is already empty. The red button and
+    /// ⌘⇧W (performClose) close the window with everything in it.
+    @objc func closeTab(_ sender: Any?) {
+        if let doc = current { close(doc) } else { window?.performClose(nil) }
     }
 
     func windowWillClose(_ notification: Notification) {
@@ -191,6 +213,7 @@ final class ViewerWindowController: NSWindowController, NSWindowDelegate, Docume
     @objc func selectNextSheet(_ sender: Any?) { current?.selectSheet(offset: 1) }
     @objc func selectPreviousSheet(_ sender: Any?) { current?.selectSheet(offset: -1) }
     @objc func selectNextTab(_ sender: Any?) { selectTab(offset: 1) }
+    @objc func newWindow(_ sender: Any?) { AppDelegate.shared?.showEmptyWindow() }
     @objc func selectPreviousTab(_ sender: Any?) { selectTab(offset: -1) }
 
     func snapshot(to path: String) { current?.snapshot(to: path) }
@@ -264,6 +287,42 @@ final class TabBarView: NSView {
 
     override func otherMouseDown(with event: NSEvent) {
         if let i = index(at: convert(event.locationInWindow, from: nil)) { onClose?(i) }
+    }
+}
+
+/// What an empty window shows: the name and how to fill it. Takes `o`, `?` and `q`.
+final class EmptyView: NSView {
+    var onOpen: (() -> Void)?
+    var onHelp: (() -> Void)?
+    var onClose: (() -> Void)?
+
+    override var acceptsFirstResponder: Bool { true }
+
+    override func draw(_ dirtyRect: NSRect) {
+        NSColor.textBackgroundColor.setFill()
+        bounds.fill()
+        let para = NSMutableParagraphStyle()
+        para.alignment = .center
+        para.lineSpacing = 4
+        let text = NSMutableAttributedString(string: "viw\n", attributes: [
+            .font: NSFont.systemFont(ofSize: 28, weight: .semibold), .foregroundColor: NSColor.tertiaryLabelColor, .paragraphStyle: para,
+        ])
+        text.append(NSAttributedString(string: "Drop a file here, press o to open one,\nor run  viw FILE  in a terminal.\n? shows the keys, q closes the window.", attributes: [
+            .font: NSFont.systemFont(ofSize: 13), .foregroundColor: NSColor.secondaryLabelColor, .paragraphStyle: para,
+        ]))
+        let size = text.boundingRect(with: NSSize(width: bounds.width - 40, height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin]).size
+        text.draw(with: NSRect(x: 20, y: ((bounds.height - size.height) / 2).rounded(), width: bounds.width - 40, height: size.height), options: [.usesLineFragmentOrigin])
+    }
+
+    override func keyDown(with event: NSEvent) {
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        guard !flags.contains(.command) else { return super.keyDown(with: event) }
+        switch event.charactersIgnoringModifiers ?? "" {
+        case "o": onOpen?()
+        case "?": onHelp?()
+        case "q": onClose?()
+        default: break
+        }
     }
 }
 

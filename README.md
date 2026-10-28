@@ -51,6 +51,9 @@ images, but not `.html`, which stays with the browser) and prints what each now 
 limits it to those extensions. viw ships with
 `LSHandlerRank = Alternate`, so installing alone never takes a type away from Preview or TextEdit.
 
+A bare `viw` (or the Dock icon) opens an empty window: drop a file on it, press `o`, or run `viw FILE` and the file
+lands there as a tab. Closing the last tab leaves the window empty rather than closing it.
+
 viw is single-instance: while one is running, another `viw file.md` hands the file over and exits, and the file
 opens as a new tab in the existing window. Tabs are drawn by viw inside one window rather than with native
 macOS window tabs, so tiling window managers (AeroSpace, yabai) see a single window; the tab bar appears once
@@ -111,7 +114,7 @@ Drop files on the window to open them in new tabs.
 | `3gt` | go to tab 3 |
 | `]s` / `[s` | next / previous sheet (xlsx) |
 | `+` / `-` / `=` | zoom in / out / reset (persisted) |
-| `q` | close tab (the window goes with the last one, and the app with the last window) |
+| `q` | close the tab; the last one leaves an empty window, and `q` there closes the window (the app quits with its last window) |
 | `Esc` | clear pending count / selection |
 | `?` | key help for the current view as an overlay (Help › Keyboard Shortcuts, `⌘/`); `?` / `Esc` / `q` closes it |
 
