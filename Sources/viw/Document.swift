@@ -86,6 +86,8 @@ protocol DocumentView: AnyObject {
     func findNext(reverse: Bool)
     /// `y`: put the selection on the pasteboard.
     func copySelection()
+    /// `Y`: the whole row (tables); the same as `y` elsewhere.
+    func copyRow()
     /// Esc: drop the selection (and any search state).
     func clearSelection()
     /// `.`: show / hide a detail pane, where the view has one.
@@ -193,6 +195,7 @@ final class DocumentController: NSObject, ViewerCommands {
     func unsortRows() { documentView.unsortRows() }
     func findNext(reverse: Bool) { documentView.findNext(reverse: reverse) }
     func copySelection() { documentView.copySelection() }
+    func copyRow() { documentView.copyRow() }
     func clearSelection() { documentView.clearSelection() }
     func toggleDetail() { documentView.toggleDetail() }
     func switchPane() { documentView.switchPane() }

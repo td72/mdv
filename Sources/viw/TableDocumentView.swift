@@ -22,6 +22,9 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
     /// Field cursor in the pane (`j` / `k`); drawn only while the pane has the keyboard.
     private var fieldIndex = 0
     private var paneFocused = false
+    /// Column cursor in the grid (`h` / `l`): the cell at (selected row, columnIndex) is the one
+    /// `y` copies and `s` sorts by. Synced with `fieldIndex` when entering / leaving the pane.
+    private var columnIndex = 0
     private let searchBar = NSView()
     private let searchField = NSSearchField()
     private let footer = NSTextField(labelWithString: "")
@@ -149,6 +152,7 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
         table.columnAutoresizingStyle = .noColumnAutoresizing
         table.intercellSpacing = NSSize(width: 12, height: 2)
         table.headerView = NSTableHeaderView()
+        table.onFocusChange = { [weak self] _ in self?.redrawCursorRows() }
         scrollView.documentView = table
 
         footer.autoresizingMask = [.width, .maxYMargin]
@@ -287,7 +291,32 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
 
     func numberOfRows(in tableView: NSTableView) -> Int { rowCount }
 
-    func tableViewSelectionDidChange(_ notification: Notification) { updateDetail() }
+    func tableViewSelectionDidChange(_ notification: Notification) {
+        redrawCursorRows()
+        updateDetail()
+    }
+
+    private var lastCursorRow = -1
+    /// Repaint the rows that carry the column cursor (the old one and the new one).
+    private func redrawCursorRows() {
+        var rows = IndexSet()
+        if lastCursorRow >= 0, lastCursorRow < rowCount { rows.insert(lastCursorRow) }
+        if table.selectedRow >= 0 { rows.insert(table.selectedRow) }
+        lastCursorRow = table.selectedRow
+        if !rows.isEmpty { table.reloadData(forRowIndexes: rows, columnIndexes: IndexSet(integersIn: 0..<table.numberOfColumns)) }
+    }
+
+    // MARK: - Column cursor (h / l / 0 / $)
+
+    func setColumn(_ i: Int) {
+        guard data.columnCount > 0 else { return }
+        columnIndex = max(0, min(i, data.columnCount - 1))
+        if table.selectedRow < 0 { select(row: 0) }
+        redrawCursorRows()
+        table.scrollColumnToVisible(columnIndex + 1) // +1: the row-number column
+    }
+
+    var currentColumn: Int { columnIndex }
 
     func splitViewDidResizeSubviews(_ notification: Notification) { layoutPane() }
 
@@ -378,11 +407,13 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
     /// Enter / i / ⌃w w: grid ⇄ pane (opening the pane on the first row if nothing is selected).
     func switchPane() {
         if root.window?.firstResponder === detail {
+            columnIndex = fieldIndex // and the grid picks up the pane's field cursor
             focus()
+            redrawCursorRows()
         } else {
             if table.selectedRow < 0 { select(row: 0) }
             if !detailEnabled { detailEnabled = true; updateDetail() }
-            fieldIndex = 0 // entering from the grid always starts at the first field
+            fieldIndex = columnIndex // the pane picks up the grid's column cursor
             root.window?.makeFirstResponder(detail)
         }
     }
@@ -426,6 +457,11 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
             tf.drawsBackground = true
             tf.backgroundColor = .findHighlightColor
             tf.textColor = .black
+        } else if row == table.selectedRow, col == columnIndex, root.window?.firstResponder === table {
+            // the column cursor: a light cell on the selected (blue) row
+            tf.drawsBackground = true
+            tf.backgroundColor = .textBackgroundColor
+            tf.textColor = .labelColor
         } else {
             tf.drawsBackground = false
         }
@@ -456,13 +492,9 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
     func scrollToBottom() { select(row: rowCount - 1) }
     func scrollToPercent(_ percent: Int) { select(row: (rowCount - 1) * percent / 100) }
 
+    /// `h` / `l` move the column cursor; `0` / `$` (±1,000,000) jump to the first / last column.
     func scrollHorizontal(_ n: Int) {
-        let clip = scrollView.contentView
-        let maxX = max(0, table.frame.width - clip.bounds.width)
-        var o = clip.bounds.origin
-        o.x = min(max(0, o.x + CGFloat(n) * 160), maxX)
-        clip.scroll(to: o)
-        scrollView.reflectScrolledClipView(clip)
+        if abs(n) >= 1_000_000 { setColumn(n < 0 ? 0 : .max) } else { setColumn(columnIndex + n) }
     }
 
     // MARK: - Find
@@ -580,8 +612,8 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
         reorder()
     }
 
-    /// `s` in the grid: flip the current sort, or sort by the first column; `S`: file order.
-    func sortRows() { sort(by: sortColumn ?? 0) }
+    /// `s` in the grid: sort by the cursor column (again: flip); `S`: file order.
+    func sortRows() { sort(by: columnIndex) }
     func unsortRows() { if sortColumn != nil { sort(by: nil) } }
     var currentSortColumn: Int? { sortColumn }
 
@@ -658,6 +690,7 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
     private func show(match m: (row: Int, column: Int)) {
         let old = match
         match = m
+        columnIndex = m.column
         var rows = IndexSet(integer: m.row)
         if let old { rows.insert(old.row) }
         table.reloadData(forRowIndexes: rows, columnIndexes: IndexSet(integersIn: 0..<table.numberOfColumns))
@@ -724,20 +757,23 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
 
     // MARK: - Selection
 
-    /// `y` / ⌘C: in the pane, the selected text if any, else the current field's value; in the
-    /// grid, the selected row as a tab-separated line.
+    /// `y` / ⌘C: in the pane, the selected text if any, else the current field; in the grid,
+    /// the cell under the column cursor.
     func copySelection() {
-        if root.window?.firstResponder === detail {
-            if detail.selectedRange().length > 0 { detail.copy(nil); return }
-            guard table.selectedRow >= 0, fieldIndex < data.rows[original(table.selectedRow)].count else { return }
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(data.rows[original(table.selectedRow)][fieldIndex], forType: .string)
-            return
-        }
+        if root.window?.firstResponder === detail, detail.selectedRange().length > 0 { detail.copy(nil); return }
+        let column = root.window?.firstResponder === detail ? fieldIndex : columnIndex
         guard table.selectedRow >= 0 else { return }
-        let line = data.rows[original(table.selectedRow)].joined(separator: "\t")
+        let record = data.rows[original(table.selectedRow)]
+        guard column < record.count else { return }
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(line, forType: .string)
+        NSPasteboard.general.setString(record[column], forType: .string)
+    }
+
+    /// `Y`: the selected row as a tab-separated line.
+    func copyRow() {
+        guard table.selectedRow >= 0 else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(data.rows[original(table.selectedRow)].joined(separator: "\t"), forType: .string)
     }
 
     /// Esc: in the pane, drop its text selection and go back to the grid; in the grid, drop the
@@ -745,7 +781,9 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
     func clearSelection() {
         if root.window?.firstResponder === detail {
             detail.setSelectedRange(NSRange(location: 0, length: 0))
+            columnIndex = fieldIndex
             focus()
+            redrawCursorRows()
             return
         }
         if filtered != nil { applyFilter("") }
@@ -839,6 +877,7 @@ final class PaneCommands: ViewerCommands {
     func unsortRows() { forward.unsortRows() }
     func findNext(reverse: Bool) { forward.findNext(reverse: reverse) }
     func copySelection() { forward.copySelection() }
+    func copyRow() { forward.copyRow() }
     func clearSelection() { forward.clearSelection() }
     func toggleDetail() { forward.toggleDetail() }
     func switchPane() { forward.switchPane() }
@@ -864,6 +903,10 @@ final class VimTableView: NSTableView {
     }
 
     override func cancelOperation(_ sender: Any?) {} // no beep on Esc
+
+    var onFocusChange: ((Bool) -> Void)?
+    override func becomeFirstResponder() -> Bool { let ok = super.becomeFirstResponder(); if ok { onFocusChange?(true) }; return ok }
+    override func resignFirstResponder() -> Bool { let ok = super.resignFirstResponder(); if ok { onFocusChange?(false) }; return ok }
 
     /// Edit › Copy / ⌘C while the grid has focus.
     @objc func copy(_ sender: Any?) { commands?.copySelection() }

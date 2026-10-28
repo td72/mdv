@@ -86,20 +86,21 @@ Drop files on the window to open them in new tabs.
 | `q` | close tab (the window goes with the last one, and the app with the last window) |
 | `Esc` | clear pending count / selection |
 
-In a table, the same keys move a row cursor: `j` / `k` rows, `d` / `u` / `f` / `b` by (half) pages of rows, `gg` / `G` /
-`50G`, `h` / `l` / `0` / `$` scroll sideways, `/` opens an incremental search over all cells (Enter keeps the hit,
+In a table, the same keys move a cell cursor: `j` / `k` rows, `h` / `l` columns (`0` / `$` first / last column),
+`d` / `u` / `b` by (half) pages of rows, `gg` / `G` / `50G`, `/` opens an incremental search over all cells (Enter keeps the hit,
 Esc goes back to where you were), `n` / `N` jump to the next / previous matching row. `f` opens a filter instead:
 only rows with a cell containing the text stay (incrementally, row numbers unchanged, the footer counts the
 matches); Enter keeps the filter while you navigate, search and copy, Esc shows all rows again. Click a column
-header to sort by it (again for descending; by the column's type, empty cells last); `s` flips the
-current sort, `s` in the detail pane sorts by the highlighted field, `S` restores the file order. Selecting a row opens a
+header to sort by it (again for descending; by the column's type, empty cells last); `s` sorts by the cursor
+column (again to flip), `s` in the detail pane sorts by the highlighted field, `S` restores the file order. Selecting a row opens a
 detail pane on the right with every column in full, long and multi-line cells included; drag its divider to
 resize it, `.` hides / shows it, `I` (or View › Detail Pane, `⌘⇧D`) moves it between the right side and the
 bottom (remembered; `detail_pane = "bottom"` in the config sets the default). Enter or `i` moves the keyboard
 into the pane (`⌃W W` / `⌃W L` work too; its title turns blue): there `j` / `k` / `gg` / `G` move a cursor over the
 record's fields, `y` / `⌘C` copy the highlighted field's value, `h` / `l` go to the previous / next record,
 `d` / `u` / `f` / `b` scroll the pane's text, and Esc returns to the grid. Esc in the grid deselects and closes
-the pane. In the grid, `y` or `⌘C` copies the row as tab-separated text.
+the pane. In the grid, `y` or `⌘C` copies the cell under the cursor and `Y` the whole row as tab-separated text; entering the
+pane puts its field cursor on the grid's column, and leaving it brings the column back.
 
 The usual macOS shortcuts (`⌘C`, `⌘A`, `⌘F`, `⌘W`, `⌘Q`, `⌘+`, `⌘-`, `⌘0`, `⌃⌘F`) are in the menu bar, plus `⌘T` (open a file
 in a new tab), `⌘⇧]` / `⌘⇧[` (next / previous tab) and `⌘1`…`⌘8` / `⌘9` (nth / last tab). No shortcut uses the Option key, so

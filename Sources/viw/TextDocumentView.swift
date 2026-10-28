@@ -345,6 +345,8 @@ final class TextDocumentView: NSObject, DocumentView, NSTextViewDelegate {
         if textView.selectedRange().length > 0 { textView.copy(nil) }
     }
 
+    func copyRow() { copySelection() }
+
     func clearSelection() {
         textView.setSelectedRange(NSRange(location: textView.selectedRange().location, length: 0))
     }

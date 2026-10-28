@@ -17,6 +17,8 @@ protocol ViewerCommands: AnyObject {
     func unsortRows()
     func findNext(reverse: Bool)
     func copySelection()
+    /// `Y`: the whole line / row (tables: the row as TSV; `y` is the cell).
+    func copyRow()
     func clearSelection()
     /// `.`: show / hide the detail pane (tables: the selected row in full).
     func toggleDetail()
@@ -126,6 +128,7 @@ struct VimKeyMap {
         case "n": c.findNext(reverse: false)
         case "N": c.findNext(reverse: true)
         case "y": c.copySelection()
+        case "Y": c.copyRow()
         case "i": c.switchPane()       // like Enter: into the detail pane
         case ".": c.toggleDetail()     // show / hide the detail pane
         case "I": c.togglePanePosition()
