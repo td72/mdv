@@ -85,8 +85,10 @@ Drop files on the window to open them in new tabs.
 
 In a table, the same keys move a row cursor: `j` / `k` rows, `d` / `u` / `f` / `b` by (half) pages of rows, `gg` / `G` /
 `50G`, `h` / `l` / `0` / `$` scroll sideways, `/` opens an incremental search over all cells (Enter keeps the hit,
-Esc goes back to where you were), `n` / `N` jump to the next / previous matching row, and `y` copies the row as
-tab-separated text.
+Esc goes back to where you were), `n` / `N` jump to the next / previous matching row. Selecting a row opens a
+detail pane at the bottom with every column in full (long and multi-line cells included); drag its divider to
+resize it, `i` hides / shows it, Esc deselects and closes it. `y` or `⌘C` copies the row as tab-separated text,
+or, with text selected in the detail pane, that text.
 
 The usual macOS shortcuts (`⌘C`, `⌘A`, `⌘F`, `⌘W`, `⌘Q`, `⌘+`, `⌘-`, `⌘0`, `⌃⌘F`) are in the menu bar, plus `⌘T` (open a file
 in a new tab), `⌘⇧]` / `⌘⇧[` (next / previous tab) and `⌘1`…`⌘8` / `⌘9` (nth / last tab). No shortcut uses the Option key, so

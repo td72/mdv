@@ -83,6 +83,8 @@ protocol DocumentView: AnyObject {
     func copySelection()
     /// Esc: drop the selection (and any search state).
     func clearSelection()
+    /// `i`: show / hide a detail pane, where the view has one.
+    func toggleDetail()
 
     /// Debug: render the whole content to a PNG (VIW_SNAPSHOT).
     func snapshot(to path: String)
@@ -182,6 +184,7 @@ final class DocumentController: NSObject, ViewerCommands {
     func findNext(reverse: Bool) { documentView.findNext(reverse: reverse) }
     func copySelection() { documentView.copySelection() }
     func clearSelection() { documentView.clearSelection() }
+    func toggleDetail() { documentView.toggleDetail() }
 
     func reload() { load() }
     func closeWindow() { host?.close(self) }

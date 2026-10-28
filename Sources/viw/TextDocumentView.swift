@@ -346,6 +346,8 @@ final class TextDocumentView: NSObject, DocumentView, NSTextViewDelegate {
         textView.setSelectedRange(NSRange(location: textView.selectedRange().location, length: 0))
     }
 
+    func toggleDetail() {} // nothing to inspect in a text document
+
     // MARK: - Debug snapshot (VIW_SNAPSHOT=/path.png renders the whole document and quits)
 
     func snapshot(to path: String) {

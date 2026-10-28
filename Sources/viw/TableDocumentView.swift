@@ -5,8 +5,14 @@ import AppKit
 /// search bar and TSV copy. Rows are drawn lazily, so 100k × 20 stays smooth.
 final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NSTableViewDelegate, NSSearchFieldDelegate {
     private let root = NSView(frame: NSRect(x: 0, y: 0, width: 880, height: 960))
+    private let split = NSSplitView()
     private let scrollView = NSScrollView()
     private let table = VimTableView()
+    /// Bottom pane: the selected row as "column: value" lines, wrapped, selectable.
+    private let detailScroll = NSScrollView()
+    private let detail = VimTextView(usingTextLayoutManager: false)
+    private var detailEnabled = true
+    private var detailHeight: CGFloat = 180
     private let searchBar = NSView()
     private let searchField = NSSearchField()
     private let footer = NSTextField(labelWithString: "")
@@ -27,7 +33,7 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
     var onOpenFile: ((URL) -> Void)?
     var commands: ViewerCommands? {
         get { table.commands }
-        set { table.commands = newValue }
+        set { table.commands = newValue; detail.commands = newValue } // vim keys work in the pane too
     }
 
     override init() {
@@ -53,14 +59,40 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
         searchBar.isHidden = true
         root.addSubview(searchBar)
 
-        scrollView.autoresizingMask = [.width, .height]
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = true
         scrollView.autohidesScrollers = true
         scrollView.borderType = .noBorder
         scrollView.drawsBackground = true
         scrollView.backgroundColor = .textBackgroundColor
-        root.addSubview(scrollView)
+
+        detailScroll.hasVerticalScroller = true
+        detailScroll.autohidesScrollers = true
+        detailScroll.borderType = .noBorder
+        detailScroll.drawsBackground = true
+        detailScroll.backgroundColor = .controlBackgroundColor
+        detail.isEditable = false
+        detail.isSelectable = true
+        detail.isRichText = true
+        detail.drawsBackground = false
+        detail.maxContentWidth = .greatestFiniteMagnitude // full width, not the reading column
+        detail.minInset = NSSize(width: 12, height: 10)
+        detail.isVerticallyResizable = true
+        detail.isHorizontallyResizable = false
+        detail.autoresizingMask = [.width]
+        detail.textContainer?.widthTracksTextView = true
+        detail.textContainer?.lineFragmentPadding = 0
+        detailScroll.documentView = detail
+        detailScroll.isHidden = true
+
+        split.isVertical = false // top / bottom
+        split.dividerStyle = .thin
+        split.autoresizingMask = [.width, .height]
+        split.addArrangedSubview(scrollView)
+        split.addArrangedSubview(detailScroll)
+        split.setHoldingPriority(.defaultLow, forSubviewAt: 0)
+        split.setHoldingPriority(.defaultHigh, forSubviewAt: 1)
+        root.addSubview(split)
 
         table.dataSource = self
         table.delegate = self
@@ -91,8 +123,12 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
         searchBar.frame = NSRect(x: 0, y: b.height - top, width: b.width, height: top)
         searchField.frame = NSRect(x: 8, y: 6, width: b.width - 16, height: 22)
         searchField.autoresizingMask = [.width]
-        scrollView.frame = NSRect(x: 0, y: bottom, width: b.width, height: b.height - top - bottom)
+        split.frame = NSRect(x: 0, y: bottom, width: b.width, height: b.height - top - bottom)
         footer.frame = NSRect(x: 0, y: 4, width: b.width, height: 16)
+        if !detailScroll.isHidden {
+            detail.frame.size.width = detailScroll.contentSize.width
+            split.setPosition(max(80, split.bounds.height - detailHeight), ofDividerAt: 0)
+        }
     }
 
     // MARK: - Loading
@@ -167,6 +203,50 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
     // MARK: - NSTableViewDataSource / Delegate
 
     func numberOfRows(in tableView: NSTableView) -> Int { data.rows.count }
+
+    func tableViewSelectionDidChange(_ notification: Notification) { updateDetail() }
+
+    // MARK: - Detail pane
+
+    /// Shown while a row is selected (and `i` has not hidden it): every column of the row in
+    /// full, so long or multi-line cells that the grid truncates can be read and copied.
+    private func updateDetail() {
+        let row = table.selectedRow
+        let show = detailEnabled && row >= 0 && row < data.rows.count
+        if show {
+            if !detailScroll.isHidden { detailHeight = detailScroll.frame.height } // keep the user's drag
+            let text = NSMutableAttributedString()
+            let keyAttrs: [NSAttributedString.Key: Any] = [.font: NSFont.boldSystemFont(ofSize: font.pointSize), .foregroundColor: NSColor.secondaryLabelColor]
+            let valueAttrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.labelColor]
+            let style = NSMutableParagraphStyle()
+            style.paragraphSpacing = font.pointSize * 0.4
+            style.headIndent = 0
+            for (i, name) in data.header.enumerated() {
+                let value = i < data.rows[row].count ? data.rows[row][i] : ""
+                let line = NSMutableAttributedString(string: name.isEmpty ? "(column \(i + 1))" : name, attributes: keyAttrs)
+                line.append(NSAttributedString(string: "  ", attributes: keyAttrs))
+                line.append(NSAttributedString(string: value + "\n", attributes: valueAttrs))
+                line.addAttribute(.paragraphStyle, value: style, range: NSRange(location: 0, length: line.length))
+                text.append(line)
+            }
+            detail.textStorage?.setAttributedString(text)
+        }
+        if detailScroll.isHidden == show {
+            detailScroll.isHidden = !show
+            split.adjustSubviews()
+            layout()
+        }
+        if show { // always start at the first column, whatever the pane was scrolled to
+            detailScroll.contentView.scroll(to: .zero)
+            detailScroll.reflectScrolledClipView(detailScroll.contentView)
+        }
+    }
+
+    func toggleDetail() {
+        detailEnabled.toggle()
+        if table.selectedRow < 0, detailEnabled { select(row: 0) } // `i` with nothing selected: start at the top
+        updateDetail()
+    }
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         guard let tableColumn else { return nil }
@@ -372,17 +452,23 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
 
     // MARK: - Selection
 
-    /// `y`: the selected row as a tab-separated line.
+    /// `y` / ⌘C: text selected in the detail pane if there is any, else the selected row as a
+    /// tab-separated line.
     func copySelection() {
+        if root.window?.firstResponder === detail, detail.selectedRange().length > 0 {
+            detail.copy(nil)
+            return
+        }
         guard table.selectedRow >= 0 else { return }
         let line = data.rows[table.selectedRow].joined(separator: "\t")
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(line, forType: .string)
     }
 
-    /// Esc: drop the row selection and the search highlight.
+    /// Esc: drop the row selection (which closes the pane) and the search highlight.
     func clearSelection() {
         table.deselectAll(nil)
+        focus()
         if let m = match {
             match = nil
             table.reloadData(forRowIndexes: IndexSet(integer: m.row), columnIndexes: IndexSet(integersIn: 0..<table.numberOfColumns))
@@ -398,6 +484,7 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
             root.setFrameSize(NSSize(width: CGFloat(w), height: root.frame.height))
             layout()
         }
+        if let r = ProcessInfo.processInfo.environment["VIW_SNAPSHOT_ROW"].flatMap(Int.init) { select(row: r) } // show the pane in snapshots
         root.layoutSubtreeIfNeeded()
         guard let rep = root.bitmapImageRepForCachingDisplay(in: root.bounds) else { return }
         root.cacheDisplay(in: root.bounds, to: rep)
@@ -419,4 +506,7 @@ final class VimTableView: NSTableView {
     }
 
     override func cancelOperation(_ sender: Any?) {} // no beep on Esc
+
+    /// Edit › Copy / ⌘C while the grid has focus.
+    @objc func copy(_ sender: Any?) { commands?.copySelection() }
 }

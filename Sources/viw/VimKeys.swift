@@ -13,6 +13,8 @@ protocol ViewerCommands: AnyObject {
     func findNext(reverse: Bool)
     func copySelection()
     func clearSelection()
+    /// `i`: show / hide the detail pane (tables: the selected row in full).
+    func toggleDetail()
     func reload()
     func openFile()
     func closeWindow()
@@ -104,6 +106,7 @@ struct VimKeyMap {
         case "n": c.findNext(reverse: false)
         case "N": c.findNext(reverse: true)
         case "y": c.copySelection()
+        case "i": c.toggleDetail()
         case "r": c.reload()
         case "o": c.openFile()
         case "q": c.closeWindow()
