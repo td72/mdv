@@ -31,6 +31,14 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
     private var digitFont = NSFont.monospacedDigitSystemFont(ofSize: 14, weight: .regular)
     private var query = ""
     private var match: (row: Int, column: Int)?
+    /// Visible → original row indices while a filter or a sort is active (nil: file order, all rows).
+    private var filtered: [Int]?
+    private var filterQuery = ""
+    private var sortColumn: Int?
+    private var sortAscending = true
+    private enum BarMode { case find, filter }
+    private var barMode = BarMode.find
+    private let barLabel = NSTextField(labelWithString: "FIND")
     /// Where the user was when `/` opened the bar; Esc goes back there (vim's incsearch).
     private var searchOrigin: (row: Int, scroll: NSPoint)?
 
@@ -63,7 +71,10 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
         root.autoresizingMask = [.width, .height]
 
         searchBar.autoresizingMask = [.width, .minYMargin]
-        searchBar.wantsLayer = true
+        barLabel.font = .systemFont(ofSize: 11, weight: .semibold)
+        barLabel.textColor = .secondaryLabelColor
+        barLabel.alignment = .right
+        searchBar.addSubview(barLabel)
         searchField.placeholderString = "Find in table (Enter: next, Esc: back to table)"
         searchField.delegate = self
         // Typing is handled in controlTextDidChange (incremental); Enter / Esc in
@@ -153,7 +164,8 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
         let top: CGFloat = searchBar.isHidden ? 0 : Self.searchBarHeight
         let bottom: CGFloat = footer.isHidden ? 0 : Self.footerHeight
         searchBar.frame = NSRect(x: 0, y: b.height - top, width: b.width, height: top)
-        searchField.frame = NSRect(x: 8, y: 6, width: b.width - 16, height: 22)
+        barLabel.frame = NSRect(x: 8, y: 9, width: 48, height: 16)
+        searchField.frame = NSRect(x: 64, y: 6, width: b.width - 72, height: 22)
         searchField.autoresizingMask = [.width]
         split.frame = NSRect(x: 0, y: bottom, width: b.width, height: b.height - top - bottom)
         footer.frame = NSRect(x: 0, y: 4, width: b.width, height: 16)
@@ -209,19 +221,33 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
         }
         match = nil
         rebuildColumns()
+        if let c = sortColumn, c >= data.columnCount { sortColumn = nil }
+        rebuildVisible()
         table.reloadData()
-        if data.truncated {
-            let f = NumberFormatter()
-            f.numberStyle = .decimal
-            footer.stringValue = "Showing the first \(f.string(from: data.rows.count as NSNumber)!) of \(f.string(from: (data.totalRows - 1) as NSNumber)!) rows — the rest is cut off to keep the viewer responsive."
-        }
-        footer.isHidden = !data.truncated
-        layout()
+        updateFooter()
         if preserveScroll {
-            if savedRow >= 0, savedRow < data.rows.count { select(row: savedRow, scroll: false) }
+            if savedRow >= 0, savedRow < rowCount { select(row: savedRow, scroll: false) }
             scrollView.contentView.scroll(to: savedOrigin)
             scrollView.reflectScrolledClipView(scrollView.contentView)
         }
+    }
+
+    private func updateFooter() {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        var parts: [String] = []
+        if !filterQuery.isEmpty, let filtered {
+            parts.append("Filter “\(filterQuery)”: \(f.string(from: filtered.count as NSNumber)!) of \(f.string(from: data.rows.count as NSNumber)!) rows (Esc clears)")
+        }
+        if let c = sortColumn, c < data.header.count {
+            parts.append("sorted by \(data.header[c].isEmpty ? "column \(c + 1)" : data.header[c]) \(sortAscending ? "↑" : "↓") (S restores file order)")
+        }
+        if data.truncated {
+            parts.append("showing the first \(f.string(from: data.rows.count as NSNumber)!) of \(f.string(from: (data.totalRows - 1) as NSNumber)!) rows")
+        }
+        footer.stringValue = parts.joined(separator: " · ")
+        footer.isHidden = parts.isEmpty
+        layout()
     }
 
     /// One NSTableColumn per data column plus the row-number column; widths from the header
@@ -251,7 +277,11 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
 
     // MARK: - NSTableViewDataSource / Delegate
 
-    func numberOfRows(in tableView: NSTableView) -> Int { data.rows.count }
+    /// Rows currently shown; `original` maps a visible index back into `data.rows`.
+    private var rowCount: Int { filtered?.count ?? data.rows.count }
+    private func original(_ visible: Int) -> Int { filtered?[visible] ?? visible }
+
+    func numberOfRows(in tableView: NSTableView) -> Int { rowCount }
 
     func tableViewSelectionDidChange(_ notification: Notification) { updateDetail() }
 
@@ -263,14 +293,14 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
     /// full, so long or multi-line cells that the grid truncates can be read and copied.
     private func updateDetail() {
         let row = table.selectedRow
-        let show = detailEnabled && row >= 0 && row < data.rows.count
+        let show = detailEnabled && row >= 0 && row < rowCount
         if show {
             if !pane.isHidden { // keep the size the user dragged to
                 detailSize = split.isVertical ? pane.frame.width : pane.frame.height
             }
             let f = NumberFormatter()
             f.numberStyle = .decimal
-            paneTitle.stringValue = "ROW \(f.string(from: (row + 1) as NSNumber)!) / \(f.string(from: data.rows.count as NSNumber)!)"
+            paneTitle.stringValue = "ROW \(f.string(from: (original(row) + 1) as NSNumber)!) / \(f.string(from: data.rows.count as NSNumber)!)"
             let text = NSMutableAttributedString()
             let keyAttrs: [NSAttributedString.Key: Any] = [.font: NSFont.boldSystemFont(ofSize: font.pointSize), .foregroundColor: NSColor.secondaryLabelColor]
             let valueAttrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.labelColor]
@@ -279,7 +309,8 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
             style.headIndent = 0
             fieldRanges = []
             for (i, name) in data.header.enumerated() {
-                let value = i < data.rows[row].count ? data.rows[row][i] : ""
+                let record = data.rows[original(row)]
+                let value = i < record.count ? record[i] : ""
                 let line = NSMutableAttributedString(string: name.isEmpty ? "(column \(i + 1))" : name, attributes: keyAttrs)
                 line.append(NSAttributedString(string: "  ", attributes: keyAttrs))
                 let valueStart = line.length
@@ -345,6 +376,7 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
         } else {
             if table.selectedRow < 0 { select(row: 0) }
             if !detailEnabled { detailEnabled = true; updateDetail() }
+            fieldIndex = 0 // entering from the grid always starts at the first field
             root.window?.makeFirstResponder(detail)
         }
     }
@@ -368,7 +400,7 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
         }
         guard let tf = cell.textField else { return cell }
         if tableColumn.identifier == Self.rowNumberID {
-            tf.stringValue = String(row + 1)
+            tf.stringValue = String(original(row) + 1) // the file's row number, filter or not
             tf.font = digitFont
             tf.textColor = .tertiaryLabelColor
             tf.alignment = .right
@@ -376,7 +408,8 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
             return cell
         }
         let col = Int(tableColumn.identifier.rawValue) ?? 0
-        let value = col < data.rows[row].count ? data.rows[row][col] : ""
+        let record = data.rows[original(row)]
+        let value = col < record.count ? record[col] : ""
         let numeric = Double(value) != nil
         tf.stringValue = value
         tf.toolTip = value.contains("\n") || value.count > 40 ? value : nil // the full text of a truncated cell
@@ -400,8 +433,8 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
     }
 
     private func select(row: Int, scroll: Bool = true) {
-        guard !data.rows.isEmpty else { return }
-        let r = max(0, min(row, data.rows.count - 1))
+        guard rowCount > 0 else { return }
+        let r = max(0, min(row, rowCount - 1))
         table.selectRowIndexes(IndexSet(integer: r), byExtendingSelection: false)
         if scroll { table.scrollRowToVisible(r) }
     }
@@ -414,8 +447,8 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
     func scrollHalfPages(_ n: Int) { move(by: n * max(1, visibleRows / 2)) }
     func scrollPages(_ n: Int) { move(by: n * max(1, visibleRows - 1)) }
     func scrollToTop() { select(row: 0) }
-    func scrollToBottom() { select(row: data.rows.count - 1) }
-    func scrollToPercent(_ percent: Int) { select(row: (data.rows.count - 1) * percent / 100) }
+    func scrollToBottom() { select(row: rowCount - 1) }
+    func scrollToPercent(_ percent: Int) { select(row: (rowCount - 1) * percent / 100) }
 
     func scrollHorizontal(_ n: Int) {
         let clip = scrollView.contentView
@@ -428,11 +461,123 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
 
     // MARK: - Find
 
-    func find() {
-        searchOrigin = (table.selectedRow, scrollView.contentView.bounds.origin)
+    func find() { openBar(.find) }
+
+    /// `F`: only rows with a cell containing the text stay visible (incremental); Enter keeps
+    /// the filter, Esc (here or later in the grid) shows all rows again.
+    func filter() { openBar(.filter) }
+
+    private func openBar(_ mode: BarMode) {
+        barMode = mode
+        switch mode {
+        case .find:
+            searchOrigin = (table.selectedRow, scrollView.contentView.bounds.origin)
+            barLabel.stringValue = "FIND"
+            searchField.placeholderString = "Find in table (Enter: keep, Esc: back)"
+            searchField.stringValue = query
+        case .filter:
+            barLabel.stringValue = "FILTER"
+            searchField.placeholderString = "Show only rows containing… (Enter: keep, Esc: clear)"
+            searchField.stringValue = filterQuery
+        }
         searchBar.isHidden = false
         layout()
         root.window?.makeFirstResponder(searchField)
+    }
+
+    /// Original indices of the rows with any cell containing `text` (ASCII case-insensitive).
+    private static func rows(matching text: String, in data: TableData) -> [Int] {
+        let needle = Array(text.lowercased().utf8)
+        return data.rows.indices.filter { r in data.rows[r].contains { contains($0, needle) } }
+    }
+
+    private func applyFilter(_ text: String) {
+        filterQuery = text
+        reorder()
+    }
+
+    /// Recompute the visible rows (sort order, then filter) and keep the selected record if it
+    /// is still visible.
+    private func reorder() {
+        let keep = table.selectedRow >= 0 ? original(table.selectedRow) : -1
+        rebuildVisible()
+        match = nil
+        table.reloadData()
+        updateFooter()
+        if keep >= 0, let v = filtered?.firstIndex(of: keep) ?? (filtered == nil ? keep : nil) {
+            select(row: v, scroll: true)
+        } else if rowCount > 0 {
+            select(row: 0, scroll: true)
+        } else {
+            updateDetail()
+        }
+    }
+
+    private func rebuildVisible() {
+        var base: [Int]? = sortColumn.map { Self.order(by: $0, ascending: sortAscending, in: data) }
+        if !filterQuery.isEmpty {
+            let needle = Array(filterQuery.lowercased().utf8)
+            base = (base ?? Array(data.rows.indices)).filter { r in data.rows[r].contains { Self.contains($0, needle) } }
+        }
+        filtered = base
+    }
+
+    // MARK: - Sort
+
+    /// Original row indices sorted by `column`: numerically when every non-empty cell parses as
+    /// a number, otherwise as case-insensitive text; empty cells go last either way.
+    private static func order(by column: Int, ascending: Bool, in data: TableData) -> [Int] {
+        let cells = data.rows.map { column < $0.count ? $0[column] : "" }
+        let numbers = cells.map { $0.isEmpty ? nil : Double($0) }
+        let numeric = zip(cells, numbers).allSatisfy { $0.isEmpty || $1 != nil }
+        var idx = Array(data.rows.indices)
+        if numeric {
+            idx.sort { a, b in
+                switch (numbers[a], numbers[b]) {
+                case let (x?, y?): return ascending ? x < y : x > y
+                case (nil, nil): return a < b
+                case (nil, _): return false
+                case (_, nil): return true
+                }
+            }
+        } else {
+            let keys = cells.map { $0.lowercased() }
+            idx.sort { a, b in
+                if keys[a].isEmpty != keys[b].isEmpty { return keys[b].isEmpty }
+                let c = keys[a].compare(keys[b])
+                if c == .orderedSame { return a < b }
+                return ascending ? c == .orderedAscending : c == .orderedDescending
+            }
+        }
+        return idx
+    }
+
+    /// Sort by `column`; the same column again flips the direction. `nil` restores file order.
+    func sort(by column: Int?) {
+        if let column {
+            if sortColumn == column { sortAscending.toggle() } else { sortColumn = column; sortAscending = true }
+        } else {
+            sortColumn = nil
+            sortAscending = true
+        }
+        for c in table.tableColumns { table.setIndicatorImage(nil, in: c) }
+        table.highlightedTableColumn = nil
+        if let c = sortColumn, c + 1 < table.tableColumns.count {
+            let col = table.tableColumns[c + 1] // +1: the row-number column
+            table.setIndicatorImage(NSImage(named: sortAscending ? "NSAscendingSortIndicator" : "NSDescendingSortIndicator"), in: col)
+            table.highlightedTableColumn = col
+        }
+        reorder()
+    }
+
+    /// `s` in the grid: flip the current sort, or sort by the first column; `S`: file order.
+    func sortRows() { sort(by: sortColumn ?? 0) }
+    func unsortRows() { if sortColumn != nil { sort(by: nil) } }
+    var currentSortColumn: Int? { sortColumn }
+
+    func tableView(_ tableView: NSTableView, didClick tableColumn: NSTableColumn) {
+        guard tableColumn.identifier != Self.rowNumberID, let c = Int(tableColumn.identifier.rawValue) else { return }
+        sort(by: c)
     }
 
     private func hideSearch() {
@@ -445,21 +590,21 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
     /// cell containing `query`, case-insensitive, wrapping around; the first matching cell is
     /// highlighted. Row-wise so that `n` always moves to a new row.
     private func search(fromRow row: Int, reverse: Bool, includeStart: Bool) -> Bool {
-        guard !query.isEmpty, !data.rows.isEmpty else { return false }
+        guard !query.isEmpty, rowCount > 0 else { return false }
         let t0 = CFAbsoluteTimeGetCurrent()
         defer {
             if ProcessInfo.processInfo.environment["VIW_TIMING"] != nil {
                 FileHandle.standardError.write("table search: \(Int((CFAbsoluteTimeGetCurrent() - t0) * 1000)) ms\n".data(using: .utf8)!)
             }
         }
-        let n = data.rows.count
+        let n = rowCount
         let needle = Array(query.lowercased().utf8)
         var r = max(0, min(row, n - 1))
         if !includeStart { r += reverse ? -1 : 1 }
         for _ in 0..<n {
             if r < 0 { r = n - 1 }
             if r >= n { r = 0 }
-            if let c = data.rows[r].firstIndex(where: { Self.contains($0, needle) }) {
+            if let c = data.rows[original(r)].firstIndex(where: { Self.contains($0, needle) }) {
                 show(match: (r, c))
                 return true
             }
@@ -515,22 +660,38 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
         _ = search(fromRow: match?.row ?? table.selectedRow, reverse: reverse, includeStart: false)
     }
 
-    // Incremental: every edit searches again from where `/` was pressed, like vim's incsearch.
+    // Incremental: every edit searches again from where `/` was pressed (vim's incsearch), or
+    // re-filters.
     func controlTextDidChange(_ obj: Notification) {
-        query = searchField.stringValue
-        if !query.isEmpty { _ = search(fromRow: searchOrigin?.row ?? 0, reverse: false, includeStart: true) }
+        switch barMode {
+        case .find:
+            query = searchField.stringValue
+            if !query.isEmpty { _ = search(fromRow: searchOrigin?.row ?? 0, reverse: false, includeStart: true) }
+        case .filter:
+            applyFilter(searchField.stringValue)
+        }
     }
 
-    /// Enter: keep the match and hand the keyboard back to the table (n / N continue).
+    /// Enter: keep the match / filter and hand the keyboard back to the table.
     private func searchEntered() {
-        query = searchField.stringValue
-        if query.isEmpty { cancelSearch(); return }
-        if match == nil { _ = search(fromRow: searchOrigin?.row ?? 0, reverse: false, includeStart: true) }
+        switch barMode {
+        case .find:
+            query = searchField.stringValue
+            if query.isEmpty { cancelSearch(); return }
+            if match == nil { _ = search(fromRow: searchOrigin?.row ?? 0, reverse: false, includeStart: true) }
+        case .filter:
+            applyFilter(searchField.stringValue)
+        }
         hideSearch()
     }
 
-    /// Esc in the bar: back to where the search started, highlight gone.
+    /// Esc in the bar: find → back to where the search started, highlight gone; filter → all rows.
     private func cancelSearch() {
+        if barMode == .filter {
+            applyFilter("")
+            hideSearch()
+            return
+        }
         if let m = match {
             match = nil
             table.reloadData(forRowIndexes: IndexSet(integer: m.row), columnIndexes: IndexSet(integersIn: 0..<table.numberOfColumns))
@@ -558,25 +719,26 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
     func copySelection() {
         if root.window?.firstResponder === detail {
             if detail.selectedRange().length > 0 { detail.copy(nil); return }
-            guard table.selectedRow >= 0, fieldIndex < data.rows[table.selectedRow].count else { return }
+            guard table.selectedRow >= 0, fieldIndex < data.rows[original(table.selectedRow)].count else { return }
             NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(data.rows[table.selectedRow][fieldIndex], forType: .string)
+            NSPasteboard.general.setString(data.rows[original(table.selectedRow)][fieldIndex], forType: .string)
             return
         }
         guard table.selectedRow >= 0 else { return }
-        let line = data.rows[table.selectedRow].joined(separator: "\t")
+        let line = data.rows[original(table.selectedRow)].joined(separator: "\t")
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(line, forType: .string)
     }
 
     /// Esc: in the pane, drop its text selection and go back to the grid; in the grid, drop the
-    /// row selection (which closes the pane) and the search highlight.
+    /// row selection (which closes the pane), the search highlight and any filter.
     func clearSelection() {
         if root.window?.firstResponder === detail {
             detail.setSelectedRange(NSRange(location: 0, length: 0))
             focus()
             return
         }
+        if filtered != nil { applyFilter("") }
         table.deselectAll(nil)
         focus()
         if let m = match {
@@ -641,6 +803,9 @@ final class PaneCommands: ViewerCommands {
     func scrollToPercent(_ percent: Int) { view?.setField(((view?.fieldCount ?? 1) - 1) * percent / 100) }
 
     func find() { forward.find() }
+    func filter() { forward.filter() }
+    func sortRows() { view?.sort(by: view?.fieldIndexValue ?? 0) } // `s` in the pane: by the highlighted field
+    func unsortRows() { forward.unsortRows() }
     func findNext(reverse: Bool) { forward.findNext(reverse: reverse) }
     func copySelection() { forward.copySelection() }
     func clearSelection() { forward.clearSelection() }

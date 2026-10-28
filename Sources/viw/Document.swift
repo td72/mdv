@@ -78,6 +78,11 @@ protocol DocumentView: AnyObject {
     func scrollToBottom()
     func scrollToPercent(_ percent: Int)
     func find()
+    /// `F`: filter rows, where the view has rows.
+    func filter()
+    /// `s` / `S`: sort rows / restore file order, where the view has rows.
+    func sortRows()
+    func unsortRows()
     func findNext(reverse: Bool)
     /// `y`: put the selection on the pasteboard.
     func copySelection()
@@ -183,6 +188,9 @@ final class DocumentController: NSObject, ViewerCommands {
     func scrollToBottom() { documentView.scrollToBottom() }
     func scrollToPercent(_ percent: Int) { documentView.scrollToPercent(percent) }
     func find() { documentView.find() }
+    func filter() { documentView.filter() }
+    func sortRows() { documentView.sortRows() }
+    func unsortRows() { documentView.unsortRows() }
     func findNext(reverse: Bool) { documentView.findNext(reverse: reverse) }
     func copySelection() { documentView.copySelection() }
     func clearSelection() { documentView.clearSelection() }

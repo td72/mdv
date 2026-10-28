@@ -85,7 +85,11 @@ Drop files on the window to open them in new tabs.
 
 In a table, the same keys move a row cursor: `j` / `k` rows, `d` / `u` / `f` / `b` by (half) pages of rows, `gg` / `G` /
 `50G`, `h` / `l` / `0` / `$` scroll sideways, `/` opens an incremental search over all cells (Enter keeps the hit,
-Esc goes back to where you were), `n` / `N` jump to the next / previous matching row. Selecting a row opens a
+Esc goes back to where you were), `n` / `N` jump to the next / previous matching row. `F` opens a filter instead:
+only rows with a cell containing the text stay (incrementally, row numbers unchanged, the footer counts the
+matches); Enter keeps the filter while you navigate, search and copy, Esc shows all rows again. Click a column
+header to sort by it (again for descending; numeric columns compare as numbers, empty cells last); `s` flips the
+current sort, `s` in the detail pane sorts by the highlighted field, `S` restores the file order. Selecting a row opens a
 detail pane on the right with every column in full, long and multi-line cells included; drag its divider to
 resize it, `.` hides / shows it, `I` (or View › Detail Pane, `⌘⇧D`) moves it between the right side and the
 bottom (remembered; `detail_pane = "bottom"` in the config sets the default). Enter or `i` moves the keyboard
