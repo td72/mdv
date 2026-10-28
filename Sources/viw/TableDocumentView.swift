@@ -760,28 +760,53 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
     /// `y` / ⌘C: in the pane, the selected text if any, else the current field; in the grid,
     /// the cell under the column cursor.
     func copySelection() {
-        if root.window?.firstResponder === detail, detail.selectedRange().length > 0 {
+        let inPane = root.window?.firstResponder === detail
+        if inPane, detail.selectedRange().length > 0 {
             detail.copy(nil)
-            Toast.show(in: root, "Copied", detail: (detail.string as NSString).substring(with: detail.selectedRange()))
+            Toast.show(in: root, "Copied", detail: (detail.string as NSString).substring(with: detail.selectedRange()),
+                       near: paneRect(for: detail.selectedRange()))
             return
         }
-        let column = root.window?.firstResponder === detail ? fieldIndex : columnIndex
+        let column = inPane ? fieldIndex : columnIndex
         guard table.selectedRow >= 0 else { return }
         let record = data.rows[original(table.selectedRow)]
         guard column < record.count else { return }
-        put(record[column], label: column < data.header.count ? data.header[column] : "cell")
+        let anchor = inPane
+            ? (fieldRanges.indices.contains(fieldIndex) ? paneRect(for: fieldRanges[fieldIndex].line) : nil)
+            : cellRect(column: column)
+        put(record[column], label: column < data.header.count ? data.header[column] : "cell", near: anchor)
     }
 
     /// `Y`: the selected row as a tab-separated line.
     func copyRow() {
         guard table.selectedRow >= 0 else { return }
-        put(data.rows[original(table.selectedRow)].joined(separator: "\t"), label: "row \(original(table.selectedRow) + 1)")
+        put(data.rows[original(table.selectedRow)].joined(separator: "\t"), label: "row \(original(table.selectedRow) + 1)",
+            near: cellRect(column: columnIndex))
     }
 
-    private func put(_ text: String, label: String) {
+    private func put(_ text: String, label: String, near anchor: NSRect?) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
-        Toast.show(in: root, "Copied \(label)", detail: text)
+        Toast.show(in: root, "Copied \(label)", detail: text, near: anchor)
+    }
+
+    /// The selected row's cell in `root` coordinates (nil when scrolled out of view).
+    private func cellRect(column: Int) -> NSRect? {
+        guard table.selectedRow >= 0 else { return nil }
+        let r = table.frameOfCell(atColumn: column + 1, row: table.selectedRow)
+        let visible = r.intersection(table.visibleRect)
+        return visible.isEmpty ? nil : root.convert(visible, from: table)
+    }
+
+    /// A range of the pane text in `root` coordinates.
+    private func paneRect(for range: NSRange) -> NSRect? {
+        guard let lm = detail.layoutManager, let tc = detail.textContainer else { return nil }
+        let g = lm.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
+        var r = lm.boundingRect(forGlyphRange: g, in: tc)
+        r.origin.x += detail.textContainerOrigin.x
+        r.origin.y += detail.textContainerOrigin.y
+        let visible = r.intersection(detail.visibleRect)
+        return visible.isEmpty ? nil : root.convert(visible, from: detail)
     }
 
     /// Esc: in the pane, drop its text selection and go back to the grid; in the grid, drop the

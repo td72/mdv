@@ -345,7 +345,16 @@ final class TextDocumentView: NSObject, DocumentView, NSTextViewDelegate {
         let r = textView.selectedRange()
         guard r.length > 0 else { return }
         textView.copy(nil)
-        Toast.show(in: scrollView, "Copied", detail: (textView.string as NSString).substring(with: r))
+        var anchor: NSRect?
+        if let lm = textView.layoutManager, let tc = textView.textContainer {
+            let g = lm.glyphRange(forCharacterRange: r, actualCharacterRange: nil)
+            var rect = lm.boundingRect(forGlyphRange: g, in: tc)
+            rect.origin.x += textView.textContainerOrigin.x
+            rect.origin.y += textView.textContainerOrigin.y
+            let visible = rect.intersection(textView.visibleRect)
+            anchor = visible.isEmpty ? nil : scrollView.convert(visible, from: textView)
+        }
+        Toast.show(in: scrollView, "Copied", detail: (textView.string as NSString).substring(with: r), near: anchor)
     }
 
     func copyRow() { copySelection() }
