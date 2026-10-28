@@ -266,10 +266,14 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
         let sample = data.rows.prefix(200)
         for (i, name) in data.header.enumerated() {
             let col = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(String(i)))
-            col.title = name
-            var w = width(name) + 8
+            let type = i < data.types.count ? data.types[i] : .text
+            let header = TypedHeaderCell(textCell: name)
+            header.typeName = type.rawValue
+            col.headerCell = header
+            col.headerToolTip = "\(name) — \(type.rawValue)"
+            var w = width(name) + width(type.rawValue) + 24
             for row in sample where i < row.count { w = max(w, width(row[i])) }
-            col.width = min(max(w + 12, 48), 480)
+            col.width = min(max(w + 12, 56), 480)
             col.minWidth = 32
             table.addTableColumn(col)
         }
@@ -308,10 +312,12 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
             style.paragraphSpacing = font.pointSize * 0.4
             style.headIndent = 0
             fieldRanges = []
+            let typeAttrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: font.pointSize * 0.8), .foregroundColor: NSColor.tertiaryLabelColor]
             for (i, name) in data.header.enumerated() {
                 let record = data.rows[original(row)]
                 let value = i < record.count ? record[i] : ""
                 let line = NSMutableAttributedString(string: name.isEmpty ? "(column \(i + 1))" : name, attributes: keyAttrs)
+                if i < data.types.count { line.append(NSAttributedString(string: " \(data.types[i].rawValue)", attributes: typeAttrs)) }
                 line.append(NSAttributedString(string: "  ", attributes: keyAttrs))
                 let valueStart = line.length
                 line.append(NSAttributedString(string: value + "\n", attributes: valueAttrs))
@@ -410,7 +416,7 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
         let col = Int(tableColumn.identifier.rawValue) ?? 0
         let record = data.rows[original(row)]
         let value = col < record.count ? record[col] : ""
-        let numeric = Double(value) != nil
+        let numeric = col < data.types.count && data.types[col].isNumeric // by column, so a stray text cell does not break the alignment
         tf.stringValue = value
         tf.toolTip = value.contains("\n") || value.count > 40 ? value : nil // the full text of a truncated cell
         tf.font = numeric ? digitFont : font
@@ -524,32 +530,36 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
 
     // MARK: - Sort
 
-    /// Original row indices sorted by `column`: numerically when every non-empty cell parses as
-    /// a number, otherwise as case-insensitive text; empty cells go last either way.
+    /// Original row indices sorted by `column` according to its type (numbers as numbers, dates
+    /// by their parts, booleans false < true, text case-insensitive); empty cells go last, ties
+    /// keep file order.
     private static func order(by column: Int, ascending: Bool, in data: TableData) -> [Int] {
         let cells = data.rows.map { column < $0.count ? $0[column] : "" }
-        let numbers = cells.map { $0.isEmpty ? nil : Double($0) }
-        let numeric = zip(cells, numbers).allSatisfy { $0.isEmpty || $1 != nil }
+        let type = column < data.types.count ? data.types[column] : .text
         var idx = Array(data.rows.indices)
-        if numeric {
+        func sorted<K: Comparable>(_ keys: [K?]) {
             idx.sort { a, b in
-                switch (numbers[a], numbers[b]) {
-                case let (x?, y?): return ascending ? x < y : x > y
+                switch (keys[a], keys[b]) {
+                case let (x?, y?): return x == y ? a < b : (ascending ? x < y : x > y)
                 case (nil, nil): return a < b
                 case (nil, _): return false
                 case (_, nil): return true
                 }
             }
-        } else {
-            let keys = cells.map { $0.lowercased() }
-            idx.sort { a, b in
-                if keys[a].isEmpty != keys[b].isEmpty { return keys[b].isEmpty }
-                let c = keys[a].compare(keys[b])
-                if c == .orderedSame { return a < b }
-                return ascending ? c == .orderedAscending : c == .orderedDescending
-            }
+        }
+        switch type {
+        case .integer, .number: sorted(cells.map { Double($0) })
+        case .boolean: sorted(cells.map { $0.isEmpty ? nil : (["true", "yes"].contains($0.lowercased()) ? 1 : 0) })
+        case .date: sorted(cells.map { ColumnType.dateParts($0).map(DateKey.init) })
+        case .text: sorted(cells.map { $0.isEmpty ? nil : $0.lowercased() })
         }
         return idx
+    }
+
+    /// Lexicographic comparison of date parts (`[y, m, d, h, mi, s]`).
+    private struct DateKey: Comparable {
+        let parts: [Int]
+        static func < (a: DateKey, b: DateKey) -> Bool { a.parts.lexicographicallyPrecedes(b.parts) }
     }
 
     /// Sort by `column`; the same column again flips the direction. `nil` restores file order.
@@ -763,6 +773,27 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
         if let png = rep.representation(using: .png, properties: [:]) {
             try? png.write(to: URL(fileURLWithPath: path))
         }
+    }
+}
+
+/// Column header showing the name and, right-aligned in gray, the inferred type.
+final class TypedHeaderCell: NSTableHeaderCell {
+    var typeName = ""
+
+    override func draw(withFrame cellFrame: NSRect, in controlView: NSView) {
+        super.draw(withFrame: cellFrame, in: controlView)
+        guard !typeName.isEmpty else { return }
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 9), .foregroundColor: NSColor.tertiaryLabelColor,
+        ]
+        let size = (typeName as NSString).size(withAttributes: attrs)
+        let titleWidth = (stringValue as NSString).size(withAttributes: [.font: font ?? NSFont.systemFont(ofSize: 11)]).width
+        var x = cellFrame.maxX - size.width - 6
+        if x < cellFrame.minX + titleWidth + 10 { return } // no room: the tooltip still has it
+        if controlView is NSTableHeaderView, (controlView as? NSTableHeaderView)?.tableView?.highlightedTableColumn?.headerCell === self {
+            x -= 14 // leave the sort indicator alone
+        }
+        (typeName as NSString).draw(at: NSPoint(x: x, y: cellFrame.midY - size.height / 2), withAttributes: attrs)
     }
 }
 

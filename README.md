@@ -54,8 +54,10 @@ extensions as plain monospace text. `.json` is re-indented (invalid JSON, or `.j
 written); `.jsonl` / `.ndjson` shows each record in its own box, broken lines verbatim. Very large files are cut
 off at 1 MB of displayed text with a notice, so a 100 MB dump still opens in a few seconds.
 
-`.csv` / `.tsv` open as a table: the first row is the header, columns are sized from the data, numbers are
-right-aligned. Quoted fields (commas, `""`, line breaks inside) follow RFC 4180; the delimiter (`,` `\t` `;`) is
+`.csv` / `.tsv` open as a table: the first row is the header, columns are sized from the data, and each column
+gets a type inferred from its cells (integer, number, boolean, date or text, shown in the header and the detail
+pane): numeric columns are right-aligned and sorting compares by type (numbers as numbers, dates by date, booleans
+false < true, text case-insensitively) while the cell text stays exactly as written. Quoted fields (commas, `""`, line breaks inside) follow RFC 4180; the delimiter (`,` `\t` `;`) is
 guessed from the first lines and the encoding is UTF-8 with a Shift_JIS fallback for CSVs that Excel writes.
 100k rows × 20 columns parse in about 0.1 s; past 500k rows the rest is cut off with a notice. Relative links to other Markdown or source files open in the same tab. `http(s)` / `mailto` links open in the default
 browser; links to other local files are revealed in Finder rather than launched, and other URL schemes are ignored.
@@ -89,7 +91,7 @@ In a table, the same keys move a row cursor: `j` / `k` rows, `d` / `u` / `f` / `
 Esc goes back to where you were), `n` / `N` jump to the next / previous matching row. `f` opens a filter instead:
 only rows with a cell containing the text stay (incrementally, row numbers unchanged, the footer counts the
 matches); Enter keeps the filter while you navigate, search and copy, Esc shows all rows again. Click a column
-header to sort by it (again for descending; numeric columns compare as numbers, empty cells last); `s` flips the
+header to sort by it (again for descending; by the column's type, empty cells last); `s` flips the
 current sort, `s` in the detail pane sorts by the highlighted field, `S` restores the file order. Selecting a row opens a
 detail pane on the right with every column in full, long and multi-line cells included; drag its divider to
 resize it, `.` hides / shows it, `I` (or View › Detail Pane, `⌘⇧D`) moves it between the right side and the

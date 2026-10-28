@@ -1,13 +1,67 @@
 import Foundation
 
+/// What every non-empty cell of a column parses as. Drives alignment and sorting; the cell
+/// text itself is never changed.
+enum ColumnType: String {
+    case integer, number, boolean, date, text
+
+    var isNumeric: Bool { self == .integer || self == .number }
+
+    /// Strictest type that fits all non-empty cells (an all-empty column is text).
+    static func infer(_ cells: [String]) -> ColumnType {
+        var candidates: Set<ColumnType> = [.integer, .number, .boolean, .date]
+        var any = false
+        for cell in cells where !cell.isEmpty {
+            any = true
+            if candidates.contains(.integer), Int(cell) == nil { candidates.remove(.integer) }
+            if candidates.contains(.number), Double(cell) == nil { candidates.remove(.number) }
+            if candidates.contains(.boolean), !booleans.contains(cell.lowercased()) { candidates.remove(.boolean) }
+            if candidates.contains(.date), dateParts(cell) == nil { candidates.remove(.date) }
+            if candidates.isEmpty { return .text }
+        }
+        guard any else { return .text }
+        for t in [ColumnType.integer, .number, .boolean, .date] where candidates.contains(t) { return t }
+        return .text
+    }
+
+    static let booleans: Set<String> = ["true", "false", "yes", "no"]
+
+    /// `yyyy-MM-dd` / `yyyy/MM/dd` with an optional ` HH:mm[:ss]` or `THH:mm[:ss]` → sortable parts.
+    static func dateParts(_ s: String) -> [Int]? {
+        var parts: [Int] = []
+        var n = 0, digits = 0
+        var expectSep: [UInt8] = [UInt8(ascii: "-"), UInt8(ascii: "/")]
+        for b in s.utf8 {
+            if b >= 48 && b <= 57 { n = n * 10 + Int(b - 48); digits += 1; continue }
+            guard digits > 0 else { return nil }
+            parts.append(n); n = 0; digits = 0
+            switch parts.count {
+            case 1: guard expectSep.contains(b) else { return nil }; expectSep = [b]
+            case 2: guard expectSep.contains(b) else { return nil }
+            case 3: guard b == UInt8(ascii: " ") || b == UInt8(ascii: "T") else { return nil }
+            case 4, 5: guard b == UInt8(ascii: ":") else { return nil }
+            default: return nil
+            }
+        }
+        if digits > 0 { parts.append(n) }
+        guard (3...6).contains(parts.count), parts[0] >= 1000, (1...12).contains(parts[1]), (1...31).contains(parts[2]) else { return nil }
+        return parts
+    }
+}
+
 /// A parsed delimited file: the first row is the header.
 struct TableData {
     var header: [String]
     var rows: [[String]]
     /// Rows dropped past `CSV.maxRows` (total rows in the file, including the header).
     var totalRows: Int
+    var types: [ColumnType] = []
     var columnCount: Int { header.count }
     var truncated: Bool { rows.count + 1 < totalRows }
+
+    mutating func inferTypes() {
+        types = (0..<columnCount).map { c in ColumnType.infer(rows.map { c < $0.count ? $0[c] : "" }) }
+    }
 }
 
 /// RFC 4180 reader with no dependencies: quoted fields (with `""` escapes and embedded
@@ -27,7 +81,9 @@ enum CSV {
             rows[i].append(contentsOf: repeatElement("", count: width - rows[i].count))
         }
         guard !rows.isEmpty else { return TableData(header: [], rows: [], totalRows: 0) }
-        return TableData(header: rows[0], rows: Array(rows.dropFirst()), totalRows: total)
+        var table = TableData(header: rows[0], rows: Array(rows.dropFirst()), totalRows: total)
+        table.inferTypes()
+        return table
     }
 
     /// UTF-8 (BOM or not) first, then Shift_JIS (what Excel on a Japanese Mac writes), then
