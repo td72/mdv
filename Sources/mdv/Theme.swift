@@ -78,6 +78,61 @@ struct Theme {
         Theme.dynamic(light: NSColor(white: 0, alpha: 0.035), dark: NSColor(white: 1, alpha: 0.06))
     }
 
+    // MARK: Syntax colors (GitHub's light / dark code palette)
+
+    private static let syntax: [String: NSColor] = [
+        "comment": hex(0x59636E, dark: 0x8B949E),
+        "keyword": hex(0xCF222E, dark: 0xFF7B72),
+        "include": hex(0xCF222E, dark: 0xFF7B72),
+        "conditional": hex(0xCF222E, dark: 0xFF7B72),
+        "repeat": hex(0xCF222E, dark: 0xFF7B72),
+        "exception": hex(0xCF222E, dark: 0xFF7B72),
+        "storageclass": hex(0xCF222E, dark: 0xFF7B72),
+        "string": hex(0x0A3069, dark: 0xA5D6FF),
+        "string.special.key": hex(0x0550AE, dark: 0x79C0FF),
+        "string.escape": hex(0x0550AE, dark: 0x79C0FF),
+        "string.regexp": hex(0x116329, dark: 0x7EE787),
+        "escape": hex(0x0550AE, dark: 0x79C0FF),
+        "property": hex(0x0550AE, dark: 0x79C0FF),
+        "field": hex(0x0550AE, dark: 0x79C0FF),
+        "variable.member": hex(0x0550AE, dark: 0x79C0FF),
+        "variable.builtin": hex(0x0550AE, dark: 0x79C0FF),
+        "number": hex(0x0550AE, dark: 0x79C0FF),
+        "float": hex(0x0550AE, dark: 0x79C0FF),
+        "boolean": hex(0x0550AE, dark: 0x79C0FF),
+        "constant": hex(0x0550AE, dark: 0x79C0FF),
+        "attribute": hex(0x0550AE, dark: 0x79C0FF),
+        "function": hex(0x8250DF, dark: 0xD2A8FF),
+        "method": hex(0x8250DF, dark: 0xD2A8FF),
+        "constructor": hex(0x8250DF, dark: 0xD2A8FF),
+        "type": hex(0x953800, dark: 0xFFA657),
+        "class": hex(0x953800, dark: 0xFFA657),
+        "struct": hex(0x953800, dark: 0xFFA657),
+        "tag": hex(0x116329, dark: 0x7EE787),
+        "label": hex(0x116329, dark: 0x7EE787),
+        "text.title": hex(0x0550AE, dark: 0x79C0FF),
+        "markup.heading": hex(0x0550AE, dark: 0x79C0FF),
+    ]
+
+    /// Color for a tree-sitter capture name ("string.special.key" → itself, then "string.special",
+    /// then "string"); nil means plain code text (operators, punctuation, variables).
+    func codeColor(for capture: String) -> NSColor? {
+        var parts = capture.split(separator: ".").map(String.init)
+        while !parts.isEmpty {
+            if let c = Theme.syntax[parts.joined(separator: ".")] { return c }
+            parts.removeLast()
+        }
+        return nil
+    }
+
+    private static func hex(_ light: UInt32, dark: UInt32) -> NSColor {
+        func c(_ v: UInt32) -> NSColor {
+            NSColor(srgbRed: CGFloat((v >> 16) & 0xFF) / 255, green: CGFloat((v >> 8) & 0xFF) / 255,
+                    blue: CGFloat(v & 0xFF) / 255, alpha: 1)
+        }
+        return dynamic(light: c(light), dark: c(dark))
+    }
+
     static func dynamic(light: NSColor, dark: NSColor) -> NSColor {
         NSColor(name: nil) { appearance in
             appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light

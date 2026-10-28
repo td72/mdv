@@ -10,6 +10,15 @@ final class MarkdownRenderer {
     private var out = NSMutableAttributedString()
     private let maxImageWidth: CGFloat
 
+    /// A fenced code block with a known language, to be syntax-highlighted after the fact
+    /// (see `DocumentController.highlight`). `range` is in the string `render` returned.
+    struct CodeBlockRef {
+        var range: NSRange
+        let code: String
+        let language: String
+    }
+    private(set) var codeBlocks: [CodeBlockRef] = []
+
     /// Pending list marker ("•", "1.", "☑") to be glued onto the next paragraph.
     private var pendingMarker: (text: String, indent: CGFloat)?
 
@@ -40,6 +49,7 @@ final class MarkdownRenderer {
 
     func render(_ document: Document) -> NSAttributedString {
         out = NSMutableAttributedString()
+        codeBlocks = []
         pendingMarker = nil
         let ctx = Context()
         for child in document.children { block(child, ctx) }
@@ -53,7 +63,7 @@ final class MarkdownRenderer {
         switch node {
         case let p as Paragraph: paragraph(p, ctx)
         case let h as Heading: heading(h, ctx)
-        case let c as CodeBlock: codeBlock(c.code, ctx, dim: false)
+        case let c as CodeBlock: codeBlock(c.code, ctx, dim: false, language: c.language)
         case let h as HTMLBlock: codeBlock(h.rawHTML, ctx, dim: true)
         case let q as BlockQuote: quote(q, ctx)
         case let l as UnorderedList: list(l, ordered: false, start: 1, ctx)
@@ -106,7 +116,7 @@ final class MarkdownRenderer {
         finish(s, style)
     }
 
-    private func codeBlock(_ code: String, _ ctx: Context, dim: Bool) {
+    private func codeBlock(_ code: String, _ ctx: Context, dim: Bool, language: String? = nil) {
         flushMarker(ctx)
         var text = code
         while text.hasSuffix("\n") { text.removeLast() }
@@ -127,9 +137,15 @@ final class MarkdownRenderer {
         if dim { attrs[.obliqueness] = 0 }
         // One paragraph per line, all sharing the same NSTextBlock → drawn as one box.
         let lines = text.isEmpty ? [""] : text.components(separatedBy: "\n")
+        let block = NSMutableAttributedString()
         for line in lines {
-            out.append(NSAttributedString(string: line + "\n", attributes: attrs))
+            block.append(NSAttributedString(string: line + "\n", attributes: attrs))
         }
+        if !dim, let language, Highlighter.language(for: language) != nil {
+            codeBlocks.append(CodeBlockRef(range: NSRange(location: out.length, length: (text as NSString).length),
+                                           code: text, language: language))
+        }
+        out.append(block)
     }
 
     private func quote(_ q: BlockQuote, _ ctx: Context) {

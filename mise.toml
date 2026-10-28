@@ -23,6 +23,8 @@ rm -rf "$MDV_APP"
 mkdir -p "$MDV_APP/Contents/MacOS" "$MDV_APP/Contents/Resources"
 cp "$MDV_BIN" "$MDV_APP/Contents/MacOS/mdv"
 cp Resources/Info.plist "$MDV_APP/Contents/Info.plist"
+# tree-sitter highlight queries (Bundle.module looks in Contents/Resources)
+cp -R .build/release/CodeEditLanguages_CodeEditLanguages.bundle "$MDV_APP/Contents/Resources/"
 codesign --force --sign - "$MDV_APP"
 '''
 
