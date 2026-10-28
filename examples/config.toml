@@ -1,5 +1,5 @@
-# mdv configuration — copy to ~/.config/mdv/config.toml
-# All keys are optional. Edit and press `r` in mdv to apply.
+# viw configuration — copy to ~/.config/viw/config.toml
+# All keys are optional. Edit and press `r` in viw to apply.
 
 # font = "Hiragino Sans"        # body / heading font family (default: system font, SF)
 # code_font = "JetBrains Mono"  # code font family (default: SF Mono)

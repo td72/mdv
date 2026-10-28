@@ -1,6 +1,8 @@
-# mdv — markdown viewer (vi/vim)
+# viw — vim-keyed viewer
 
-A small, fast, native GitHub Flavored Markdown viewer for macOS with vim keybindings.
+A small, fast, native viewer for macOS with vim keybindings. It renders GitHub Flavored Markdown today; source
+code, CSV, xlsx and PDF are planned ([#4](https://github.com/td72/viw/issues/4)). It was called `mdv` until
+v0.2; the old `~/.config/mdv/config.toml` is still read until you move it.
 
 - **Native AppKit** — `NSTextView` + TextKit 1, no WebView, no Electron. Opens in well under a second, a 4,500-line document parses, renders and lays out in ~150 ms.
 - **GFM** via [swift-markdown](https://github.com/swiftlang/swift-markdown) (cmark-gfm): tables, task lists, strikethrough, fenced code, block quotes, images, autolinks, front matter.
@@ -16,16 +18,16 @@ Requires macOS 14+, Xcode Command Line Tools (Swift 5.9+) and [mise](https://mis
 
 ```sh
 mise trust
-mise r install        # builds build/mdv.app, copies it to ~/Applications, symlinks ~/.local/bin/mdv
+mise r install        # builds build/viw.app, copies it to ~/Applications, symlinks ~/.local/bin/viw
 ```
 
-Or just `mise r app` and drag `build/mdv.app` wherever you like. `swift build -c release` also works on its own: the bare binary at `.build/release/mdv` is a complete GUI app.
+Or just `mise r app` and drag `build/viw.app` wherever you like. `swift build -c release` also works on its own: the bare binary at `.build/release/viw` is a complete GUI app.
 
 | Task | What |
 |------|------|
 | `mise r build` | release build |
-| `mise r app` | assemble `build/mdv.app` |
-| `mise r install` | install to `~/Applications` + `~/.local/bin/mdv` |
+| `mise r app` | assemble `build/viw.app` |
+| `mise r install` | install to `~/Applications` + `~/.local/bin/viw` |
 | `mise r run [file]` | build and open a file |
 | `mise r snapshot [file] [-o out.png] [--dark] [--width 700]` | render to PNG (debug) |
 | `mise r clean` | remove `.build` and `build` |
@@ -33,13 +35,13 @@ Or just `mise r app` and drag `build/mdv.app` wherever you like. `swift build -c
 ## Usage
 
 ```sh
-mdv README.md               # open a file (several files → several tabs)
-cat notes.md | mdv          # read from stdin
-open -a mdv README.md       # or double-click / drag a .md onto the Dock icon
+viw README.md               # open a file (several files → several tabs)
+cat notes.md | viw          # read from stdin
+open -a viw README.md       # or double-click / drag a .md onto the Dock icon
 ```
 
-mdv is single-instance: while one is running, another `mdv file.md` hands the file over and exits, and the file
-opens as a new tab in the existing window. Tabs are drawn by mdv inside one window rather than with native
+viw is single-instance: while one is running, another `viw file.md` hands the file over and exits, and the file
+opens as a new tab in the existing window. Tabs are drawn by viw inside one window rather than with native
 macOS window tabs, so tiling window managers (AeroSpace, yabai) see a single window; the tab bar appears once
 there are two or more tabs. Click a tab to select it, middle-click to close it.
 
@@ -75,7 +77,7 @@ AeroSpace-style `⌥hjkl` bindings are untouched.
 
 ## Configuration
 
-Optional, read from `~/.config/mdv/config.toml` (`$XDG_CONFIG_HOME` is honored, `MDV_CONFIG=path` overrides).
+Optional, read from `~/.config/viw/config.toml` (`$XDG_CONFIG_HOME` is honored, `VIW_CONFIG=path` overrides).
 Press `r` after editing it to apply. See [`examples/config.toml`](examples/config.toml).
 
 ```toml
@@ -92,20 +94,20 @@ Only flat `key = value` lines are parsed (no TOML library is linked). Unknown fo
 
 | Path | What |
 |------|------|
-| `Sources/mdv/main.swift` | app delegate, menu bar, CLI parsing |
-| `Sources/mdv/ViewerWindow.swift` | window, in-window tab bar, tab switching / closing |
-| `Sources/mdv/Document.swift` | one tab: scroll view, load / reload, scrolling, find, zoom, link handling |
-| `Sources/mdv/SingleInstance.swift` | CFMessagePort hand-off from a second `mdv` process to the running one |
-| `Sources/mdv/VimTextView.swift` | read-only text view with the vim key handling |
-| `Sources/mdv/Renderer.swift` | swift-markdown AST → `NSAttributedString` (blocks are `NSTextTable` cells) |
-| `Sources/mdv/Highlighter.swift` | fence language → tree-sitter grammar, `highlights.scm` queries, capture spans |
-| `Sources/mdv/Theme.swift` | fonts, sizes, dynamic colors and the syntax color palette |
-| `Sources/mdv/Config.swift` | `~/.config/mdv/config.toml` reader |
-| `Sources/mdv/FileWatcher.swift` | kqueue file watcher that survives atomic saves |
+| `Sources/viw/main.swift` | app delegate, menu bar, CLI parsing |
+| `Sources/viw/ViewerWindow.swift` | window, in-window tab bar, tab switching / closing |
+| `Sources/viw/Document.swift` | one tab: scroll view, load / reload, scrolling, find, zoom, link handling |
+| `Sources/viw/SingleInstance.swift` | CFMessagePort hand-off from a second `viw` process to the running one |
+| `Sources/viw/VimTextView.swift` | read-only text view with the vim key handling |
+| `Sources/viw/Renderer.swift` | swift-markdown AST → `NSAttributedString` (blocks are `NSTextTable` cells) |
+| `Sources/viw/Highlighter.swift` | fence language → tree-sitter grammar, `highlights.scm` queries, capture spans |
+| `Sources/viw/Theme.swift` | fonts, sizes, dynamic colors and the syntax color palette |
+| `Sources/viw/Config.swift` | `~/.config/viw/config.toml` reader |
+| `Sources/viw/FileWatcher.swift` | kqueue file watcher that survives atomic saves |
 
-Debug helpers (environment variables, wrapped by `mise r snapshot`): `MDV_TIMING=1` prints parse / render / layout /
-highlight-query times and scroll offsets to stderr, `MDV_SNAPSHOT=out.png` renders the whole document to a PNG and exits (`MDV_SNAPSHOT_WIDTH=700`,
-`MDV_DARK=1` to vary).
+Debug helpers (environment variables, wrapped by `mise r snapshot`): `VIW_TIMING=1` prints parse / render / layout /
+highlight-query times and scroll offsets to stderr, `VIW_SNAPSHOT=out.png` renders the whole document to a PNG and exits (`VIW_SNAPSHOT_WIDTH=700`,
+`VIW_DARK=1` to vary).
 
 ## License
 

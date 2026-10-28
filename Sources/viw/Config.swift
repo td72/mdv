@@ -1,7 +1,7 @@
 import Foundation
 
-/// User configuration, read from `$XDG_CONFIG_HOME/mdv/config.toml`
-/// (default `~/.config/mdv/config.toml`) or the file named by `MDV_CONFIG`.
+/// User configuration, read from `$XDG_CONFIG_HOME/viw/config.toml`
+/// (default `~/.config/viw/config.toml`) or the file named by `VIW_CONFIG`.
 ///
 /// Only a flat `key = value` subset of TOML is understood (strings, numbers,
 /// `#` comments), so no TOML dependency is needed.
@@ -14,9 +14,13 @@ struct Config {
 
     static var path: URL {
         let env = ProcessInfo.processInfo.environment
-        if let p = env["MDV_CONFIG"], !p.isEmpty { return URL(fileURLWithPath: NSString(string: p).expandingTildeInPath) }
+        if let p = env["VIW_CONFIG"], !p.isEmpty { return URL(fileURLWithPath: NSString(string: p).expandingTildeInPath) }
         let base = env["XDG_CONFIG_HOME"].flatMap { $0.isEmpty ? nil : $0 } ?? NSHomeDirectory() + "/.config"
-        return URL(fileURLWithPath: base + "/mdv/config.toml")
+        let new = URL(fileURLWithPath: base + "/viw/config.toml")
+        if FileManager.default.fileExists(atPath: new.path) { return new }
+        // The app was called mdv before; keep reading its config until the user moves it.
+        let old = URL(fileURLWithPath: base + "/mdv/config.toml")
+        return FileManager.default.fileExists(atPath: old.path) ? old : new
     }
 
     static func load() -> Config {

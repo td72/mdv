@@ -1,43 +1,44 @@
-# mdv — markdown viewer (vi/vim)
+# viw — vim-keyed viewer (markdown for now; see issue #4)
 # Swift comes from the Apple toolchain (Xcode Command Line Tools); AppKit needs it, so it is not a mise tool.
 
 [env]
-MDV_APP = "build/mdv.app"
-MDV_BIN = ".build/release/mdv"
-MDV_PREFIX = "{{env.HOME}}/Applications"
-MDV_BINDIR = "{{env.HOME}}/.local/bin"
+VIW_APP = "build/viw.app"
+VIW_BIN = ".build/release/viw"
+VIW_PREFIX = "{{env.HOME}}/Applications"
+VIW_BINDIR = "{{env.HOME}}/.local/bin"
 
 [tasks.build]
 description = "Release build (swift build -c release)"
 alias = "b"
 run = "swift build -c release"
 sources = ["Package.swift", "Package.resolved", "Sources/**/*.swift"]
-outputs = [".build/release/mdv"]
+outputs = [".build/release/viw"]
 
 [tasks.app]
-description = "Assemble build/mdv.app from the release binary"
+description = "Assemble build/viw.app from the release binary"
 depends = ["build"]
 run = '''
 set -euo pipefail
-rm -rf "$MDV_APP"
-mkdir -p "$MDV_APP/Contents/MacOS" "$MDV_APP/Contents/Resources"
-cp "$MDV_BIN" "$MDV_APP/Contents/MacOS/mdv"
-cp Resources/Info.plist "$MDV_APP/Contents/Info.plist"
+rm -rf "$VIW_APP"
+mkdir -p "$VIW_APP/Contents/MacOS" "$VIW_APP/Contents/Resources"
+cp "$VIW_BIN" "$VIW_APP/Contents/MacOS/viw"
+cp Resources/Info.plist "$VIW_APP/Contents/Info.plist"
 # tree-sitter highlight queries (Bundle.module looks in Contents/Resources)
-cp -R .build/release/CodeEditLanguages_CodeEditLanguages.bundle "$MDV_APP/Contents/Resources/"
-codesign --force --sign - "$MDV_APP"
+cp -R .build/release/CodeEditLanguages_CodeEditLanguages.bundle "$VIW_APP/Contents/Resources/"
+codesign --force --sign - "$VIW_APP"
 '''
 
 [tasks.install]
-description = "Copy mdv.app to ~/Applications and symlink the CLI into ~/.local/bin"
+description = "Copy viw.app to ~/Applications and symlink the CLI into ~/.local/bin"
 depends = ["app"]
 run = '''
 set -euo pipefail
-rm -rf "$MDV_PREFIX/mdv.app"
-mkdir -p "$MDV_PREFIX" "$MDV_BINDIR"
-cp -R "$MDV_APP" "$MDV_PREFIX/mdv.app"
-ln -sf "$MDV_PREFIX/mdv.app/Contents/MacOS/mdv" "$MDV_BINDIR/mdv"
-echo "installed: $MDV_PREFIX/mdv.app  (cli: $MDV_BINDIR/mdv)"
+rm -rf "$VIW_PREFIX/viw.app" "$VIW_PREFIX/mdv.app"   # mdv.app: the pre-rename install
+rm -f "$VIW_BINDIR/mdv"
+mkdir -p "$VIW_PREFIX" "$VIW_BINDIR"
+cp -R "$VIW_APP" "$VIW_PREFIX/viw.app"
+ln -sf "$VIW_PREFIX/viw.app/Contents/MacOS/viw" "$VIW_BINDIR/viw"
+echo "installed: $VIW_PREFIX/viw.app  (cli: $VIW_BINDIR/viw)"
 '''
 
 [tasks.run]
@@ -46,7 +47,7 @@ depends = ["build"]
 usage = '''
 arg "[file]" help="Markdown file to open" default="examples/sample.md"
 '''
-run = '"$MDV_BIN" "${usage_file}"'
+run = '"$VIW_BIN" "${usage_file}"'
 
 [tasks.snapshot]
 description = "Render a file to a PNG (debug) — mise r snapshot [file] [-o out.png] [--dark] [--width N]"
@@ -60,10 +61,10 @@ flag "--width <pt>" help="Text view width in points"
 run = '''
 set -euo pipefail
 mkdir -p "$(dirname "${usage_out}")"
-export MDV_SNAPSHOT="${usage_out}"
-[ -n "${usage_width:-}" ] && export MDV_SNAPSHOT_WIDTH="${usage_width}"
-[ "${usage_dark:-}" = "true" ] && export MDV_DARK=1
-"$MDV_BIN" "${usage_file}"
+export VIW_SNAPSHOT="${usage_out}"
+[ -n "${usage_width:-}" ] && export VIW_SNAPSHOT_WIDTH="${usage_width}"
+[ "${usage_dark:-}" = "true" ] && export VIW_DARK=1
+"$VIW_BIN" "${usage_file}"
 echo "wrote ${usage_out}"
 '''
 

@@ -122,7 +122,7 @@ final class DocumentController: NSObject, NSTextViewDelegate, ViewerCommands {
             baseURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath + "/stdin")
         }
 
-        let timing = ProcessInfo.processInfo.environment["MDV_TIMING"] != nil
+        let timing = ProcessInfo.processInfo.environment["VIW_TIMING"] != nil
         var t0 = CFAbsoluteTimeGetCurrent()
         func lap(_ label: String) {
             guard timing else { return }
@@ -153,7 +153,7 @@ final class DocumentController: NSObject, NSTextViewDelegate, ViewerCommands {
             lap("layout")
         }
         host?.documentDidChangeTitle(self)
-        let syncHighlight = ProcessInfo.processInfo.environment["MDV_SNAPSHOT"] != nil
+        let syncHighlight = ProcessInfo.processInfo.environment["VIW_SNAPSHOT"] != nil
         highlight(codeBlocks, sync: syncHighlight)
         if timing, syncHighlight, !codeBlocks.isEmpty { lap("highlight (sync)") }
 
@@ -291,7 +291,7 @@ final class DocumentController: NSObject, NSTextViewDelegate, ViewerCommands {
         o.y = min(max(0, y), maxY)
         clip.scroll(to: o)
         scrollView.reflectScrolledClipView(clip)
-        if ProcessInfo.processInfo.environment["MDV_TIMING"] != nil {
+        if ProcessInfo.processInfo.environment["VIW_TIMING"] != nil {
             FileHandle.standardError.write("scrollY: \(Int(o.y)) / \(Int(maxY))\n".data(using: .utf8)!)
         }
     }
@@ -370,11 +370,11 @@ final class DocumentController: NSObject, NSTextViewDelegate, ViewerCommands {
         if let u = source.url { NSWorkspace.shared.activateFileViewerSelecting([u]) }
     }
 
-    // MARK: - Debug snapshot (MDV_SNAPSHOT=/path.png renders the whole document and quits)
+    // MARK: - Debug snapshot (VIW_SNAPSHOT=/path.png renders the whole document and quits)
 
     func snapshot(to path: String) {
         guard path != "/dev/null" else { return }
-        if let w = ProcessInfo.processInfo.environment["MDV_SNAPSHOT_WIDTH"].flatMap(Double.init) {
+        if let w = ProcessInfo.processInfo.environment["VIW_SNAPSHOT_WIDTH"].flatMap(Double.init) {
             textView.setFrameSize(NSSize(width: CGFloat(w), height: textView.frame.height))
         }
         textView.layoutManager?.ensureLayout(for: textView.textContainer!)

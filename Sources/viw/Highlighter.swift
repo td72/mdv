@@ -12,7 +12,7 @@ enum Highlighter {
     }
 
     /// All highlighting runs here (parsers and compiled queries are not thread-safe).
-    static let queue = DispatchQueue(label: "mdv.highlight", qos: .userInitiated)
+    static let queue = DispatchQueue(label: "viw.highlight", qos: .userInitiated)
     private static var parsers: [TreeSitterLanguage: Parser] = [:]
     private static var queries: [TreeSitterLanguage: Query?] = [:]
 
@@ -56,7 +56,7 @@ enum Highlighter {
         let source = urls.compactMap { try? String(contentsOf: $0, encoding: .utf8) }.joined(separator: "\n")
         let t0 = CFAbsoluteTimeGetCurrent()
         defer {
-            if ProcessInfo.processInfo.environment["MDV_TIMING"] != nil {
+            if ProcessInfo.processInfo.environment["VIW_TIMING"] != nil {
                 let ms = Int((CFAbsoluteTimeGetCurrent() - t0) * 1000)
                 FileHandle.standardError.write("query compile (\(lang.tsName)): \(ms) ms\n".data(using: .utf8)!)
             }
@@ -65,7 +65,7 @@ enum Highlighter {
         do {
             query = source.isEmpty ? nil : try Query(language: tsLanguage, data: Data(source.utf8))
         } catch {
-            FileHandle.standardError.write("mdv: highlight query for \(lang.tsName) failed: \(error)\n".data(using: .utf8)!)
+            FileHandle.standardError.write("viw: highlight query for \(lang.tsName) failed: \(error)\n".data(using: .utf8)!)
             query = nil
         }
         queries[lang.id] = query
