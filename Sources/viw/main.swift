@@ -1,4 +1,5 @@
 import AppKit
+import UniformTypeIdentifiers
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     static var shared: AppDelegate? { NSApp.delegate as? AppDelegate }
@@ -176,6 +177,7 @@ if args.contains("-h") || args.contains("--help") {
 
     usage: viw [FILE ...]        open files (markdown, source code, .json, .csv / .tsv, .xlsx, .pdf, images)
            cat FILE | viw        read markdown from stdin
+           viw --set-default     make viw the default app for its file types (or: --set-default md csv)
 
     keys (`?` in the app shows the ones for the current view):
 
@@ -226,6 +228,48 @@ if args.first == "--xlsx", args.count >= 2 {
         FileHandle.standardError.write("viw: \(error)\n".data(using: .utf8)!)
         exit(1)
     }
+}
+
+// `viw --set-default [ext ...]`: make viw the default app for its document types (every
+// extension in Info.plist when none is given). Needs the installed app bundle; the CLI symlink
+// in ~/.local/bin resolves to it.
+if args.first == "--set-default" {
+    let exe = (Bundle.main.executableURL ?? URL(fileURLWithPath: CommandLine.arguments[0])).resolvingSymlinksInPath()
+    let bundleURL = exe.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    guard bundleURL.pathExtension == "app", let bundle = Bundle(url: bundleURL), let bundleID = bundle.bundleIdentifier,
+          let types = bundle.infoDictionary?["CFBundleDocumentTypes"] as? [[String: Any]] else {
+        FileHandle.standardError.write("viw: --set-default needs the installed app (mise r install, then viw --set-default)\n".data(using: .utf8)!)
+        exit(1)
+    }
+    var exts = args.dropFirst().map { $0.hasPrefix(".") ? String($0.dropFirst()).lowercased() : $0.lowercased() }
+    // Web pages stay with the browser unless asked for by name.
+    let browserTypes: Set<String> = ["html", "htm"]
+    if exts.isEmpty { exts = types.flatMap { $0["CFBundleTypeExtensions"] as? [String] ?? [] }.filter { !browserTypes.contains($0) } }
+    let lock = NSLock()
+    var errors: [String: String] = [:]
+    let group = DispatchGroup()
+    var wanted: [(String, UTType)] = []
+    for ext in exts {
+        guard let type = UTType(filenameExtension: ext) else { errors[ext] = "no type for the extension"; continue }
+        wanted.append((ext, type))
+        group.enter()
+        NSWorkspace.shared.setDefaultApplication(at: bundleURL, toOpen: type) { error in
+            if let error { lock.lock(); errors[ext] = error.localizedDescription; lock.unlock() }
+            group.leave()
+        }
+    }
+    // Completions may arrive on the main queue: pump it while waiting.
+    while group.wait(timeout: .now()) == .timedOut { RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05)) }
+    var failed = 0
+    for (ext, type) in wanted {
+        let now = LSCopyDefaultRoleHandlerForContentType(type.identifier as CFString, .all)?.takeRetainedValue() as String? ?? "?"
+        let ok = errors[ext] == nil && now == bundleID
+        if !ok { failed += 1 }
+        print(".\(ext)".padding(toLength: 10, withPad: " ", startingAt: 0) + type.identifier.padding(toLength: 56, withPad: " ", startingAt: 0)
+              + (ok ? "viw" : "FAILED: \(errors[ext] ?? "still \(now)")"))
+    }
+    for (ext, e) in errors where !wanted.contains(where: { $0.0 == ext }) { print(".\(ext): \(e)"); failed += 1 }
+    exit(failed == 0 ? 0 : 1)
 }
 
 var files: [URL] = []
