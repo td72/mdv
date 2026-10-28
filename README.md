@@ -89,8 +89,9 @@ Esc goes back to where you were), `n` / `N` jump to the next / previous matching
 detail pane on the right with every column in full, long and multi-line cells included; drag its divider to
 resize it, `i` hides / shows it, `I` (or View › Detail Pane, `⌘⇧D`) moves it between the right side and the
 bottom (remembered; `detail_pane = "bottom"` in the config sets the default). Enter moves the keyboard into
-the pane (`⌃W W` / `⌃W L` work too), where `j` / `k` scroll it and Esc returns to the grid; Esc in the grid
-deselects and closes the pane. `y` or `⌘C` copies the row as tab-separated text, or, with text selected in the
+the pane (`⌃W W` / `⌃W L` work too; its title turns blue): there `j` / `k` / `gg` / `G` step through the rows while
+you read, `d` / `u` / `f` / `b` scroll the pane's own text, and Esc returns to the grid. Esc in the grid deselects
+and closes the pane. `y` or `⌘C` copies the row as tab-separated text, or, with text selected in the
 detail pane, that text.
 
 The usual macOS shortcuts (`⌘C`, `⌘A`, `⌘F`, `⌘W`, `⌘Q`, `⌘+`, `⌘-`, `⌘0`, `⌃⌘F`) are in the menu bar, plus `⌘T` (open a file
