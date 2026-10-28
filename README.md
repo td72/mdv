@@ -45,6 +45,12 @@ cat notes.md | viw          # read from stdin
 open -a viw README.md       # or double-click / drag a .md onto the Dock icon
 ```
 
+To make viw the default app for its file types (Finder double-click, `open`), run `viw --set-default` once after
+`mise r install`; it registers every extension viw declares (Markdown, text, source code, JSON, CSV / TSV, xlsx, PDF,
+images, but not `.html`, which stays with the browser) and prints what each now opens with. `viw --set-default md csv`
+limits it to those extensions. viw ships with
+`LSHandlerRank = Alternate`, so installing alone never takes a type away from Preview or TextEdit.
+
 viw is single-instance: while one is running, another `viw file.md` hands the file over and exits, and the file
 opens as a new tab in the existing window. Tabs are drawn by viw inside one window rather than with native
 macOS window tabs, so tiling window managers (AeroSpace, yabai) see a single window; the tab bar appears once
