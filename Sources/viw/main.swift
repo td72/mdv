@@ -132,6 +132,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         view.addItem(withTitle: "Zoom Out", action: #selector(ViewerWindowController.zoomOut(_:)), keyEquivalent: "-")
         view.addItem(withTitle: "Actual Size", action: #selector(ViewerWindowController.actualSize(_:)), keyEquivalent: "0")
         view.addItem(.separator())
+        view.addItem(withTitle: "Detail Pane: Right / Bottom", action: #selector(ViewerWindowController.togglePanePosition(_:)), keyEquivalent: "D")
+        view.addItem(.separator())
         view.addItem(withTitle: "Enter Full Screen", action: #selector(NSWindow.toggleFullScreen(_:)), keyEquivalent: "f")
             .keyEquivalentModifierMask = [.command, .control]
         main.addItem(submenu(view, title: "View"))
@@ -167,7 +169,7 @@ if args.contains("-h") || args.contains("--help") {
 
     keys:  j/k ^e/^y  line      d/u ^d/^u  half page    f/b ^f/^b space  page
            gg / G    top/bottom  5G  go to 50%  (counts work: 5j, 3d, ...)
-           /  find   n/N  next/prev    y  copy selection    r  reload
+           /  find   n/N  next/prev    f  filter rows (tables)   y  copy    r  reload
            o  open   q  close tab/window   + / -  zoom   =  reset zoom
            gt / gT  Tab / S-Tab  next / previous tab    3gt  third tab   ⌘1-9  nth / last tab
 

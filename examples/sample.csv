@@ -1,0 +1,8 @@
+id,name,city,score,joined,note
+1,Alice,Tokyo,98.5,2024-01-15,"likes ""quotes"", commas, and
+line breaks"
+2,Bob,Osaka,87,2024-02-01,
+3,"Carol, Jr.",Nagoya,91.25,2024-03-10,"semi;colon"
+4,Dave,Fukuoka,-3.5,2024-04-20,negative
+5,Eve,Sapporo,1e3,2024-05-05,scientific
+6,山田 太郎,札幌,77,2024-06-30,日本語

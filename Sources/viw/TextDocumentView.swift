@@ -18,7 +18,7 @@ final class TextDocumentView: NSObject, DocumentView, NSTextViewDelegate {
     var view: NSView { scrollView }
     var onOpenFile: ((URL) -> Void)?
     /// Receiver of the vim keys typed into the text view.
-    weak var commands: ViewerCommands? {
+    var commands: ViewerCommands? {
         get { textView.commands }
         set { textView.commands = newValue }
     }
@@ -150,7 +150,7 @@ final class TextDocumentView: NSObject, DocumentView, NSTextViewDelegate {
             if records.count < all.count { truncated = (records.count, all.count) }
             attributed.append(renderer.renderCodeBlocks(records, language: "json", boxed: records.count <= 300))
             codeBlocks = renderer.codeBlocks
-        case .plain:
+        case .plain, .table: // .table has its own DocumentView; shown as text only if it ever lands here
             attributed.append(renderer.renderCode(clamp(text), language: nil))
         }
         if let t = truncated {
@@ -336,7 +336,35 @@ final class TextDocumentView: NSObject, DocumentView, NSTextViewDelegate {
     }
 
     func find() { finderAction(.showFindInterface) }
+    func filter() { find() } // no rows to filter; `f` behaves like `/`
+    func sortRows() {}
+    func unsortRows() {}
     func findNext(reverse: Bool) { finderAction(reverse ? .previousMatch : .nextMatch) }
+
+    func copySelection() {
+        let r = textView.selectedRange()
+        guard r.length > 0 else { return }
+        textView.copy(nil)
+        var anchor: NSRect?
+        if let lm = textView.layoutManager, let tc = textView.textContainer {
+            let g = lm.glyphRange(forCharacterRange: r, actualCharacterRange: nil)
+            var rect = lm.boundingRect(forGlyphRange: g, in: tc)
+            rect.origin.x += textView.textContainerOrigin.x
+            rect.origin.y += textView.textContainerOrigin.y
+            let visible = rect.intersection(textView.visibleRect)
+            anchor = visible.isEmpty ? nil : scrollView.convert(visible, from: textView)
+        }
+        Toast.show(in: scrollView, "Copied", detail: (textView.string as NSString).substring(with: r), near: anchor)
+    }
+
+    func copyRow() { copySelection() }
+
+    func clearSelection() {
+        textView.setSelectedRange(NSRange(location: textView.selectedRange().location, length: 0))
+    }
+
+    func toggleDetail() {} // nothing to inspect in a text document
+    func switchPane() {}
 
     // MARK: - Debug snapshot (VIW_SNAPSHOT=/path.png renders the whole document and quits)
 
