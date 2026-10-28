@@ -52,7 +52,8 @@ limits it to those extensions. viw ships with
 `LSHandlerRank = Alternate`, so installing alone never takes a type away from Preview or TextEdit.
 
 A bare `viw` (or the Dock icon) opens an empty window: drop a file on it, press `o`, or run `viw FILE` and the file
-lands there as a tab. Closing the last tab leaves the window empty rather than closing it.
+lands there as a tab. Closing the last tab leaves the window empty rather than closing it; what `q` / ⌘W do on that
+empty window is `close_empty` in the config: close the window (default), keep it, or quit viw.
 
 viw is single-instance: while one is running, another `viw file.md` hands the file over and exits, and the file
 opens as a new tab in the existing window. Tabs are drawn by viw inside one window rather than with native
@@ -151,6 +152,7 @@ code_scale = 0.85             # code size relative to body
 max_width = 948               # readable column width in points
 detail_pane = "right"         # default side for the CSV detail pane: "right" or "bottom" (`I` switches at runtime)
 pdf_mode = "scroll"           # PDF: "scroll" (continuous) or "page" (one page at a time; `p` switches at runtime)
+close_empty = "window"        # `q` / ⌘W on a window with no tabs: "window" (close it), "keep" (leave it open), "quit" (quit viw)
 ```
 
 Only flat `key = value` lines are parsed (no TOML library is linked). Unknown fonts fall back to the defaults with a warning on stderr.

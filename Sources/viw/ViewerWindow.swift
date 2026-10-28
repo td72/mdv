@@ -50,7 +50,7 @@ final class ViewerWindowController: NSWindowController, NSWindowDelegate, Docume
         empty.autoresizingMask = [.width, .height]
         empty.onOpen = { AppDelegate.shared?.showOpenPanel() }
         empty.onHelp = { [weak self] in self?.toggleHelp(nil) }
-        empty.onClose = { [weak self] in self?.window?.performClose(nil) }
+        empty.onClose = { [weak self] in self?.closeTab(nil) } // honours close_empty
         content.addSubview(container)
         content.addSubview(tabBar)
         layoutChrome()
@@ -72,6 +72,7 @@ final class ViewerWindowController: NSWindowController, NSWindowDelegate, Docume
     /// No tabs: the hint view takes the content and the keyboard.
     private func showEmpty() {
         selectedIndex = -1
+        empty.closeHint = Self.closeEmptyHint(Config.load().closeEmpty)
         empty.frame = container.bounds
         container.addSubview(empty)
         layoutChrome()
@@ -192,7 +193,21 @@ final class ViewerWindowController: NSWindowController, NSWindowDelegate, Docume
     /// ⌘W / `q`: close the tab, or the window when it is already empty. The red button and
     /// ⌘⇧W (performClose) close the window with everything in it.
     @objc func closeTab(_ sender: Any?) {
-        if let doc = current { close(doc) } else { window?.performClose(nil) }
+        if let doc = current { close(doc); return }
+        // No tabs: `close_empty` in the config decides.
+        switch Config.load().closeEmpty {
+        case "keep": break
+        case "quit": NSApp.terminate(nil)
+        default: window?.performClose(nil)
+        }
+    }
+
+    private static func closeEmptyHint(_ mode: String?) -> String {
+        switch mode {
+        case "keep": return "? shows the keys; this window stays (⌘⇧W closes it)."
+        case "quit": return "? shows the keys, q quits viw."
+        default: return "? shows the keys, q closes the window."
+        }
     }
 
     func windowWillClose(_ notification: Notification) {
@@ -295,6 +310,7 @@ final class EmptyView: NSView {
     var onOpen: (() -> Void)?
     var onHelp: (() -> Void)?
     var onClose: (() -> Void)?
+    var closeHint = "? shows the keys, q closes the window." { didSet { needsDisplay = true } }
 
     override var acceptsFirstResponder: Bool { true }
 
@@ -307,7 +323,7 @@ final class EmptyView: NSView {
         let text = NSMutableAttributedString(string: "viw\n", attributes: [
             .font: NSFont.systemFont(ofSize: 28, weight: .semibold), .foregroundColor: NSColor.tertiaryLabelColor, .paragraphStyle: para,
         ])
-        text.append(NSAttributedString(string: "Drop a file here, press o to open one,\nor run  viw FILE  in a terminal.\n? shows the keys, q closes the window.", attributes: [
+        text.append(NSAttributedString(string: "Drop a file here, press o to open one,\nor run  viw FILE  in a terminal.\n" + closeHint, attributes: [
             .font: NSFont.systemFont(ofSize: 13), .foregroundColor: NSColor.secondaryLabelColor, .paragraphStyle: para,
         ]))
         let size = text.boundingRect(with: NSSize(width: bounds.width - 40, height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin]).size
