@@ -760,20 +760,28 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
     /// `y` / ⌘C: in the pane, the selected text if any, else the current field; in the grid,
     /// the cell under the column cursor.
     func copySelection() {
-        if root.window?.firstResponder === detail, detail.selectedRange().length > 0 { detail.copy(nil); return }
+        if root.window?.firstResponder === detail, detail.selectedRange().length > 0 {
+            detail.copy(nil)
+            Toast.show(in: root, "Copied", detail: (detail.string as NSString).substring(with: detail.selectedRange()))
+            return
+        }
         let column = root.window?.firstResponder === detail ? fieldIndex : columnIndex
         guard table.selectedRow >= 0 else { return }
         let record = data.rows[original(table.selectedRow)]
         guard column < record.count else { return }
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(record[column], forType: .string)
+        put(record[column], label: column < data.header.count ? data.header[column] : "cell")
     }
 
     /// `Y`: the selected row as a tab-separated line.
     func copyRow() {
         guard table.selectedRow >= 0 else { return }
+        put(data.rows[original(table.selectedRow)].joined(separator: "\t"), label: "row \(original(table.selectedRow) + 1)")
+    }
+
+    private func put(_ text: String, label: String) {
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(data.rows[original(table.selectedRow)].joined(separator: "\t"), forType: .string)
+        NSPasteboard.general.setString(text, forType: .string)
+        Toast.show(in: root, "Copied \(label)", detail: text)
     }
 
     /// Esc: in the pane, drop its text selection and go back to the grid; in the grid, drop the

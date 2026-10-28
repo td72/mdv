@@ -342,7 +342,10 @@ final class TextDocumentView: NSObject, DocumentView, NSTextViewDelegate {
     func findNext(reverse: Bool) { finderAction(reverse ? .previousMatch : .nextMatch) }
 
     func copySelection() {
-        if textView.selectedRange().length > 0 { textView.copy(nil) }
+        let r = textView.selectedRange()
+        guard r.length > 0 else { return }
+        textView.copy(nil)
+        Toast.show(in: scrollView, "Copied", detail: (textView.string as NSString).substring(with: r))
     }
 
     func copyRow() { copySelection() }

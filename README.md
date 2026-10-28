@@ -133,6 +133,7 @@ Only flat `key = value` lines are parsed (no TOML library is linked). Unknown fo
 | `Sources/viw/TableDocumentView.swift` | `DocumentView` for delimited data: NSTableView grid, row cursor, search bar, TSV copy |
 | `Sources/viw/CSV.swift` | RFC 4180 parser with delimiter and encoding detection |
 | `Sources/viw/VimKeys.swift` | `ViewerCommands` and the vim key map shared by the text and table views |
+| `Sources/viw/Toast.swift` | the short-lived "Copied …" pill |
 | `Sources/viw/SingleInstance.swift` | CFMessagePort hand-off from a second `viw` process to the running one |
 | `Sources/viw/VimTextView.swift` | read-only text view (centered column) that feeds keys to the vim key map |
 | `Sources/viw/Renderer.swift` | swift-markdown AST → `NSAttributedString` (blocks are `NSTextTable` cells) |
