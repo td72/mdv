@@ -26,6 +26,7 @@ enum FileKind {
     case code(String) // tree-sitter language (fence info string)
     case json         // pretty-printed, highlighted as JSON
     case jsonl        // JSON Lines: one pretty-printed record per block
+    case table        // CSV / TSV: grid view
     case plain        // unknown extension: one monochrome code block
 
     static let markdownExtensions: Set<String> = ["md", "markdown", "mdown", "mkd", "mkdn", "txt"]
@@ -35,6 +36,7 @@ enum FileKind {
         if markdownExtensions.contains(ext) { return .markdown }
         if ["json", "jsonc", "json5"].contains(ext) { return .json }
         if ["jsonl", "ndjson"].contains(ext) { return .jsonl }
+        if ["csv", "tsv", "tab"].contains(ext) { return .table }
         if ext.isEmpty {
             // "Dockerfile" & co. carry the language in the name; anything else without an extension reads as markdown.
             return Highlighter.language(for: url.lastPathComponent) != nil ? .code(url.lastPathComponent) : .markdown
@@ -60,6 +62,8 @@ protocol DocumentView: AnyObject {
     var view: NSView { get }
     /// Tells the controller what to do with a file link the user clicked inside the content.
     var onOpenFile: ((URL) -> Void)? { get set }
+    /// Receiver of the vim keys typed into the content.
+    var commands: ViewerCommands? { get set }
 
     /// (Re)load the content. `preserveScroll` keeps the position on reload (file change, zoom).
     func load(source: Source, kind: FileKind, theme: Theme, preserveScroll: Bool)
@@ -75,6 +79,10 @@ protocol DocumentView: AnyObject {
     func scrollToPercent(_ percent: Int)
     func find()
     func findNext(reverse: Bool)
+    /// `y`: put the selection on the pasteboard.
+    func copySelection()
+    /// Esc: drop the selection (and any search state).
+    func clearSelection()
 
     /// Debug: render the whole content to a PNG (VIW_SNAPSHOT).
     func snapshot(to path: String)
@@ -109,7 +117,7 @@ final class DocumentController: NSObject, ViewerCommands {
     init(source: Source) {
         self.source = source
         self.kind = FileKind.of(source)
-        self.documentView = TextDocumentView()
+        self.documentView = Self.viewType(for: kind).init()
         super.init()
         bind(documentView)
         load()
@@ -123,12 +131,13 @@ final class DocumentController: NSObject, ViewerCommands {
 
     private func bind(_ v: DocumentView) {
         v.onOpenFile = { [weak self] url in self?.open(url) }
-        (v as? TextDocumentView)?.commands = self
+        v.commands = self
     }
 
     /// Which `DocumentView` draws `kind`; the same class is reused across loads.
     private static func viewType(for kind: FileKind) -> DocumentView.Type {
-        TextDocumentView.self
+        if case .table = kind { return TableDocumentView.self }
+        return TextDocumentView.self
     }
 
     // MARK: - Loading
@@ -171,6 +180,8 @@ final class DocumentController: NSObject, ViewerCommands {
     func scrollToPercent(_ percent: Int) { documentView.scrollToPercent(percent) }
     func find() { documentView.find() }
     func findNext(reverse: Bool) { documentView.findNext(reverse: reverse) }
+    func copySelection() { documentView.copySelection() }
+    func clearSelection() { documentView.clearSelection() }
 
     func reload() { load() }
     func closeWindow() { host?.close(self) }

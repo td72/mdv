@@ -18,7 +18,7 @@ final class TextDocumentView: NSObject, DocumentView, NSTextViewDelegate {
     var view: NSView { scrollView }
     var onOpenFile: ((URL) -> Void)?
     /// Receiver of the vim keys typed into the text view.
-    weak var commands: ViewerCommands? {
+    var commands: ViewerCommands? {
         get { textView.commands }
         set { textView.commands = newValue }
     }
@@ -150,7 +150,7 @@ final class TextDocumentView: NSObject, DocumentView, NSTextViewDelegate {
             if records.count < all.count { truncated = (records.count, all.count) }
             attributed.append(renderer.renderCodeBlocks(records, language: "json", boxed: records.count <= 300))
             codeBlocks = renderer.codeBlocks
-        case .plain:
+        case .plain, .table: // .table has its own DocumentView; shown as text only if it ever lands here
             attributed.append(renderer.renderCode(clamp(text), language: nil))
         }
         if let t = truncated {
@@ -337,6 +337,14 @@ final class TextDocumentView: NSObject, DocumentView, NSTextViewDelegate {
 
     func find() { finderAction(.showFindInterface) }
     func findNext(reverse: Bool) { finderAction(reverse ? .previousMatch : .nextMatch) }
+
+    func copySelection() {
+        if textView.selectedRange().length > 0 { textView.copy(nil) }
+    }
+
+    func clearSelection() {
+        textView.setSelectedRange(NSRange(location: textView.selectedRange().location, length: 0))
+    }
 
     // MARK: - Debug snapshot (VIW_SNAPSHOT=/path.png renders the whole document and quits)
 

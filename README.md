@@ -1,7 +1,7 @@
 # viw — vim-keyed viewer
 
-A small, fast, native viewer for macOS with vim keybindings. It renders GitHub Flavored Markdown and shows source
-files with syntax highlighting; CSV, xlsx and PDF are planned ([#4](https://github.com/td72/viw/issues/4)). It was called `mdv` until
+A small, fast, native viewer for macOS with vim keybindings. It renders GitHub Flavored Markdown, shows source
+files with syntax highlighting and CSV / TSV as a grid; xlsx and PDF are planned ([#4](https://github.com/td72/viw/issues/4)). It was called `mdv` until
 v0.2; the old `~/.config/mdv/config.toml` is still read until you move it.
 
 - **Native AppKit** — `NSTextView` + TextKit 1, no WebView, no Electron. Opens in well under a second, a 4,500-line document parses, renders and lays out in ~150 ms.
@@ -38,6 +38,7 @@ Or just `mise r app` and drag `build/viw.app` wherever you like. `swift build -c
 viw README.md               # open a file (several files → several tabs)
 viw main.swift config.toml  # source files open as one highlighted code block
 viw data.json log.jsonl     # JSON is pretty-printed (key order kept); JSON Lines → one box per record
+viw export.csv data.tsv     # delimited text as a grid (RFC 4180 quoting, delimiter / encoding detected)
 cat notes.md | viw          # read from stdin
 open -a viw README.md       # or double-click / drag a .md onto the Dock icon
 ```
@@ -51,7 +52,12 @@ What a file is depends on its name: `.md` / `.markdown` / `.txt` and most extens
 anything with a known source extension (or a name like `Dockerfile`) as a single highlighted code block, and unknown
 extensions as plain monospace text. `.json` is re-indented (invalid JSON, or `.jsonc` with comments, is shown as
 written); `.jsonl` / `.ndjson` shows each record in its own box, broken lines verbatim. Very large files are cut
-off at 1 MB of displayed text with a notice, so a 100 MB dump still opens in a few seconds. Relative links to other Markdown or source files open in the same tab. `http(s)` / `mailto` links open in the default
+off at 1 MB of displayed text with a notice, so a 100 MB dump still opens in a few seconds.
+
+`.csv` / `.tsv` open as a table: the first row is the header, columns are sized from the data, numbers are
+right-aligned. Quoted fields (commas, `""`, line breaks inside) follow RFC 4180; the delimiter (`,` `\t` `;`) is
+guessed from the first lines and the encoding is UTF-8 with a Shift_JIS fallback for CSVs that Excel writes.
+100k rows × 20 columns parse in about 0.1 s; past 500k rows the rest is cut off with a notice. Relative links to other Markdown or source files open in the same tab. `http(s)` / `mailto` links open in the default
 browser; links to other local files are revealed in Finder rather than launched, and other URL schemes are ignored.
 Drop files on the window to open them in new tabs.
 
@@ -76,6 +82,11 @@ Drop files on the window to open them in new tabs.
 | `+` / `-` / `=` | zoom in / out / reset (persisted) |
 | `q` | close tab (the window goes with the last one, and the app with the last window) |
 | `Esc` | clear pending count / selection |
+
+In a table, the same keys move a row cursor: `j` / `k` rows, `d` / `u` / `f` / `b` by (half) pages of rows, `gg` / `G` /
+`50G`, `h` / `l` / `0` / `$` scroll sideways, `/` opens an incremental search over all cells (Enter keeps the hit,
+Esc goes back to where you were), `n` / `N` jump to the next / previous matching row, and `y` copies the row as
+tab-separated text.
 
 The usual macOS shortcuts (`⌘C`, `⌘A`, `⌘F`, `⌘W`, `⌘Q`, `⌘+`, `⌘-`, `⌘0`, `⌃⌘F`) are in the menu bar, plus `⌘T` (open a file
 in a new tab), `⌘⇧]` / `⌘⇧[` (next / previous tab) and `⌘1`…`⌘8` / `⌘9` (nth / last tab). No shortcut uses the Option key, so
@@ -104,8 +115,11 @@ Only flat `key = value` lines are parsed (no TOML library is linked). Unknown fo
 | `Sources/viw/ViewerWindow.swift` | window, in-window tab bar, tab switching / closing |
 | `Sources/viw/Document.swift` | `Source` / `FileKind`, the `DocumentView` protocol, and `DocumentController` (one tab: file, theme, watcher, vim commands) |
 | `Sources/viw/TextDocumentView.swift` | `DocumentView` for text: rendering, async highlighting, link handling, scrolling, find, snapshot |
+| `Sources/viw/TableDocumentView.swift` | `DocumentView` for delimited data: NSTableView grid, row cursor, search bar, TSV copy |
+| `Sources/viw/CSV.swift` | RFC 4180 parser with delimiter and encoding detection |
+| `Sources/viw/VimKeys.swift` | `ViewerCommands` and the vim key map shared by the text and table views |
 | `Sources/viw/SingleInstance.swift` | CFMessagePort hand-off from a second `viw` process to the running one |
-| `Sources/viw/VimTextView.swift` | read-only text view with the vim key handling |
+| `Sources/viw/VimTextView.swift` | read-only text view (centered column) that feeds keys to the vim key map |
 | `Sources/viw/Renderer.swift` | swift-markdown AST → `NSAttributedString` (blocks are `NSTextTable` cells) |
 | `Sources/viw/Highlighter.swift` | fence language → tree-sitter grammar, `highlights.scm` queries, capture spans |
 | `Sources/viw/JSONPretty.swift` | order-preserving JSON re-indenter (JSONSerialization only validates) |
