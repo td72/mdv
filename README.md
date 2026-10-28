@@ -102,7 +102,8 @@ Only flat `key = value` lines are parsed (no TOML library is linked). Unknown fo
 |------|------|
 | `Sources/viw/main.swift` | app delegate, menu bar, CLI parsing |
 | `Sources/viw/ViewerWindow.swift` | window, in-window tab bar, tab switching / closing |
-| `Sources/viw/Document.swift` | one tab: scroll view, load / reload, scrolling, find, zoom, link handling |
+| `Sources/viw/Document.swift` | `Source` / `FileKind`, the `DocumentView` protocol, and `DocumentController` (one tab: file, theme, watcher, vim commands) |
+| `Sources/viw/TextDocumentView.swift` | `DocumentView` for text: rendering, async highlighting, link handling, scrolling, find, snapshot |
 | `Sources/viw/SingleInstance.swift` | CFMessagePort hand-off from a second `viw` process to the running one |
 | `Sources/viw/VimTextView.swift` | read-only text view with the vim key handling |
 | `Sources/viw/Renderer.swift` | swift-markdown AST → `NSAttributedString` (blocks are `NSTextTable` cells) |

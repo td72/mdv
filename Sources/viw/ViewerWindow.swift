@@ -132,6 +132,14 @@ final class ViewerWindowController: NSWindowController, NSWindowDelegate, Docume
         for other in documents where other !== doc { other.load() }
     }
 
+    func documentDidReplaceView(_ doc: DocumentController) {
+        guard doc === current else { return }
+        container.subviews.forEach { $0.removeFromSuperview() }
+        doc.view.frame = container.bounds
+        container.addSubview(doc.view)
+        doc.focus()
+    }
+
     // MARK: - NSWindowDelegate
 
     /// ⌘W / `q` close the current tab; the window goes with the last one.
