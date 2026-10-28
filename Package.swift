@@ -2,7 +2,7 @@
 import PackageDescription
 
 let package = Package(
-    name: "mdv",
+    name: "viw",
     platforms: [.macOS(.v14)],
     dependencies: [
         // swift-markdown has no semver tags; pin to the swift-6.4.0-RELEASE commit.
@@ -15,12 +15,12 @@ let package = Package(
     ],
     targets: [
         .executableTarget(
-            name: "mdv",
+            name: "viw",
             dependencies: [
                 .product(name: "Markdown", package: "swift-markdown"),
                 .product(name: "CodeEditLanguages", package: "CodeEditLanguages"),
             ],
-            path: "Sources/mdv"
+            path: "Sources/viw"
         ),
     ]
 )

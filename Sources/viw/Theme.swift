@@ -12,7 +12,7 @@ struct Theme {
     var codeScale: CGFloat = 0.85
     var maxWidth: CGFloat = 948
 
-    static let defaultsKey = "mdv.baseSize"
+    static let defaultsKey = "viw.baseSize"
 
     /// Config file first, then the persisted zoom level on top.
     static func load() -> Theme {
@@ -26,7 +26,8 @@ struct Theme {
         if let f = c.codeFont, t.codeFamily == nil { warn("code_font \"\(f)\" not found, using SF Mono") }
         t.codeScale = c.codeScale ?? 0.85
         t.maxWidth = c.maxWidth ?? 948
-        let saved = UserDefaults.standard.double(forKey: defaultsKey)
+        var saved = UserDefaults.standard.double(forKey: defaultsKey)
+        if saved == 0 { saved = UserDefaults.standard.double(forKey: "mdv.baseSize") } // pre-rename key
         if saved >= 8, saved <= 48 { t.baseSize = CGFloat(saved) }
         return t
     }
@@ -36,7 +37,7 @@ struct Theme {
     private static var warned: Set<String> = []
     private static func warn(_ msg: String) {
         guard warned.insert(msg).inserted else { return } // once per process, not on every reload
-        FileHandle.standardError.write("mdv: \(Config.path.path): \(msg)\n".data(using: .utf8)!)
+        FileHandle.standardError.write("viw: \(Config.path.path): \(msg)\n".data(using: .utf8)!)
     }
 
     var body: NSFont { font(bodyFamily, size: baseSize, weight: .regular) }

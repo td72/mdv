@@ -1,9 +1,9 @@
 import AppKit
 
-/// One running mdv per login session. A second `mdv file.md` hands its arguments to the
+/// One running viw per login session. A second `viw file.md` hands its arguments to the
 /// first process over a CFMessagePort (so the file opens as a new tab there) and exits.
 enum SingleInstance {
-    private static let portName = "com.td72.mdv.open"
+    private static let portName = "com.td72.viw.open"
 
     struct Request: Codable {
         var files: [String] = []

@@ -24,8 +24,8 @@ final class ViewerWindowController: NSWindowController, NSWindowDelegate, Docume
         super.init(window: window)
         window.delegate = self
         buildViews()
-        window.setFrameAutosaveName("mdv.viewer")
-        if !window.setFrameUsingName("mdv.viewer") { window.center() }
+        window.setFrameAutosaveName("viw.viewer")
+        if !window.setFrameUsingName("viw.viewer") { window.center() }
         addTab(source)
     }
 

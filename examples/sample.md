@@ -1,15 +1,15 @@
 ---
-title: mdv sample
+title: viw sample
 tags: [markdown, viewer]
 ---
 
-# mdv — markdown viewer (vi/vim)
+# viw — markdown viewer (vi/vim)
 
 A **fast**, _native_ GFM viewer for macOS. Press `?`… no, press `q` to quit. ~~Electron~~ Nope.
 
 ## Headings & inline
 
-Text with **bold**, *italic*, ***both***, `inline code`, ~~strike~~, a [link](https://github.com/td72/mdv),
+Text with **bold**, *italic*, ***both***, `inline code`, ~~strike~~, a [link](https://github.com/td72/viw),
 an autolink https://example.com and a <kbd>raw html</kbd> span.
 Hard break at the end of this line  
 continues here.
@@ -52,15 +52,15 @@ continues here.
 import AppKit
 
 let window = NSWindow(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: false)
-window.title = "mdv"   // native, no WebView
+window.title = "viw"   // native, no WebView
 ```
 
 ```json
-{"name": "mdv", "version": 1.5, "tags": ["markdown", "viewer"], "native": true, "webview": null}
+{"name": "viw", "version": 1.5, "tags": ["markdown", "viewer"], "native": true, "webview": null}
 ```
 
 ```sh
-mise r install && mdv README.md   # second mdv → new tab
+mise r install && viw README.md   # second viw → new tab
 ```
 
     indented code block

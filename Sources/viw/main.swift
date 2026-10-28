@@ -16,7 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         buildMenu()
-        if ProcessInfo.processInfo.environment["MDV_SNAPSHOT"] == nil {
+        if ProcessInfo.processInfo.environment["VIW_SNAPSHOT"] == nil {
             listener = SingleInstance.Listener { [weak self] req in self?.handle(req) }
         }
         for url in cliFiles { open(url) }
@@ -27,7 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         NSApp.activate(ignoringOtherApps: true)
 
-        if let path = ProcessInfo.processInfo.environment["MDV_SNAPSHOT"] {
+        if let path = ProcessInfo.processInfo.environment["VIW_SNAPSHOT"] {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [self] in
                 controllers.first?.snapshot(to: path)
                 NSApp.terminate(nil)
@@ -48,7 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func open(_ url: URL) { show(.file(url.standardizedFileURL)) }
 
-    /// Arguments forwarded by a second `mdv` process (see SingleInstance).
+    /// Arguments forwarded by a second `viw` process (see SingleInstance).
     private func handle(_ req: SingleInstance.Request) {
         for path in req.files { open(URL(fileURLWithPath: path)) }
         if let text = req.stdin { show(.text(text, title: "stdin")) }
@@ -97,11 +97,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let main = NSMenu()
 
         let appMenu = NSMenu()
-        appMenu.addItem(withTitle: "About mdv", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        appMenu.addItem(withTitle: "About viw", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
         appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "Hide mdv", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
-        appMenu.addItem(withTitle: "Quit mdv", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
-        main.addItem(submenu(appMenu, title: "mdv"))
+        appMenu.addItem(withTitle: "Hide viw", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+        appMenu.addItem(withTitle: "Quit viw", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        main.addItem(submenu(appMenu, title: "viw"))
 
         let file = NSMenu(title: "File")
         file.addItem(withTitle: "New Tab…", action: #selector(showOpenPanel), keyEquivalent: "t")
@@ -160,10 +160,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 let args = Array(CommandLine.arguments.dropFirst())
 if args.contains("-h") || args.contains("--help") {
     print("""
-    mdv — markdown viewer (vi/vim keys)
+    viw — vim-keyed viewer (markdown)
 
-    usage: mdv [FILE ...]        open files (GFM)
-           cat FILE | mdv        read markdown from stdin
+    usage: viw [FILE ...]        open files (GFM)
+           cat FILE | viw        read markdown from stdin
 
     keys:  j/k ^e/^y  line      d/u ^d/^u  half page    f/b ^f/^b space  page
            gg / G    top/bottom  5G  go to 50%  (counts work: 5j, 3d, ...)
@@ -171,7 +171,7 @@ if args.contains("-h") || args.contains("--help") {
            o  open   q  close tab/window   + / -  zoom   =  reset zoom
            gt / gT  Tab / S-Tab  next / previous tab    3gt  third tab   ⌘1-9  nth / last tab
 
-    A second `mdv` hands its files to the running instance (they open as tabs).
+    A second `viw` hands its files to the running instance (they open as tabs).
     """)
     exit(0)
 }
@@ -185,19 +185,19 @@ for a in args where !a.hasPrefix("-") || a == "-" {
         files.append(URL(fileURLWithPath: a, relativeTo: URL(fileURLWithPath: FileManager.default.currentDirectoryPath)))
     }
 }
-if files.isEmpty, stdinText == nil, isatty(STDIN_FILENO) == 0, ProcessInfo.processInfo.environment["MDV_SNAPSHOT"] == nil {
+if files.isEmpty, stdinText == nil, isatty(STDIN_FILENO) == 0, ProcessInfo.processInfo.environment["VIW_SNAPSHOT"] == nil {
     let data = FileHandle.standardInput.readDataToEndOfFile()
     if !data.isEmpty { stdinText = String(decoding: data, as: UTF8.self) }
 }
 
-if ProcessInfo.processInfo.environment["MDV_SNAPSHOT"] == nil,
+if ProcessInfo.processInfo.environment["VIW_SNAPSHOT"] == nil,
    SingleInstance.forward(.init(files: files.map(\.standardizedFileURL.path), stdin: stdinText)) {
     exit(0)
 }
 
 let app = NSApplication.shared
 app.setActivationPolicy(.regular)
-if ProcessInfo.processInfo.environment["MDV_DARK"] != nil { app.appearance = NSAppearance(named: .darkAqua) }
+if ProcessInfo.processInfo.environment["VIW_DARK"] != nil { app.appearance = NSAppearance(named: .darkAqua) }
 let delegate = AppDelegate(cliFiles: files, stdinText: stdinText)
 app.delegate = delegate
 app.run()

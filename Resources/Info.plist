@@ -3,13 +3,13 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleDevelopmentRegion</key><string>en</string>
-    <key>CFBundleExecutable</key><string>mdv</string>
-    <key>CFBundleIdentifier</key><string>com.td72.mdv</string>
+    <key>CFBundleExecutable</key><string>viw</string>
+    <key>CFBundleIdentifier</key><string>com.td72.viw</string>
     <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
-    <key>CFBundleName</key><string>mdv</string>
-    <key>CFBundleDisplayName</key><string>mdv</string>
+    <key>CFBundleName</key><string>viw</string>
+    <key>CFBundleDisplayName</key><string>viw</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>0.1.0</string>
+    <key>CFBundleShortVersionString</key><string>0.2.0</string>
     <key>CFBundleVersion</key><string>1</string>
     <key>LSMinimumSystemVersion</key><string>14.0</string>
     <key>NSHighResolutionCapable</key><true/>
