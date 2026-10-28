@@ -1,18 +1,32 @@
 import AppKit
+import ImageIO
 
 /// `DocumentView` for images: an NSImageView in a scroll view, fitted to the width (never
 /// enlarged), centered; `+` / `-` zoom, `=` refits, `h` / `l` / `j` / `k` scroll when larger
-/// than the window.
+/// than the window. Animated GIF / WebP / APNG / HEICS play frame by frame from ImageIO so
+/// that rotation and zoom apply to every frame; Space pauses, `n` / `N` step.
 final class ImageDocumentView: NSObject, DocumentView {
     private let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 880, height: 960))
     private let canvas = VimImageCanvas()
     private let imageView = NSImageView()
-    private var original: NSImage?
-    private var image: NSImage?
+    private var original: NSImage?   // the current frame, unrotated
+    private var image: NSImage?      // what is shown (rotated)
     private var scale: CGFloat = 1
     private var fit = true
     private var turns = 0 // quarter turns clockwise
     private let badge = StatusBadge(frame: .zero)
+
+    // Animation: the ImageIO source stays open; frames are decoded as they come up and kept
+    // while the whole sequence fits a memory budget.
+    private var frames: CGImageSource?
+    private var frameDelays: [TimeInterval] = []
+    private var frameCache: [Int: NSImage] = [:]
+    private var cacheFrames = false
+    private var frameIndex = 0
+    private var playing = false
+    private var timer: Timer?
+    private var frameCount: Int { frameDelays.count }
+    private var animated: Bool { frameCount > 1 }
 
     var view: NSView { scrollView }
     var onOpenFile: ((URL) -> Void)?
@@ -23,7 +37,9 @@ final class ImageDocumentView: NSObject, DocumentView {
     }
     var status: String? {
         guard let image else { return nil }
-        return "\(Int(image.size.width)) × \(Int(image.size.height)) · \(Int((scale * 100).rounded()))%"
+        var s = "\(Int(image.size.width)) × \(Int(image.size.height)) · \(Int((scale * 100).rounded()))%"
+        if animated { s += " · \(frameIndex + 1) / \(frameCount)" + (playing ? "" : " ⏸") }
+        return s
     }
 
     override init() {
@@ -36,20 +52,115 @@ final class ImageDocumentView: NSObject, DocumentView {
         scrollView.drawsBackground = true
         scrollView.backgroundColor = .windowBackgroundColor
         imageView.imageScaling = .scaleAxesIndependently
-        imageView.animates = true
+        imageView.animates = false // frames are driven here, so rotation / zoom apply to them
         canvas.addSubview(imageView)
         canvas.onResize = { [weak self] in self?.relayout() } // also re-anchors the badge
+        canvas.onWindowChange = { [weak self] visible in // a hidden tab or a closed window stops the timer
+            guard let self else { return }
+            if visible { if self.playing { self.scheduleNextFrame() } } else { self.timer?.invalidate(); self.timer = nil }
+        }
         scrollView.documentView = canvas
     }
+
+    deinit { timer?.invalidate() }
 
     func focus() { scrollView.window?.makeFirstResponder(canvas) }
     var helpSections: [KeyHelp.Section] { [KeyHelp.image] }
 
     func load(source: Source, kind: FileKind, theme: Theme, preserveScroll: Bool) {
+        timer?.invalidate()
+        timer = nil
+        frames = nil
+        frameDelays = []
+        frameCache = [:]
+        let keepFrame = preserveScroll ? frameIndex : 0
+        frameIndex = 0
         guard let url = source.url, let img = NSImage(contentsOf: url) else { original = nil; image = nil; imageView.image = nil; return }
         original = img
+        if let src = CGImageSourceCreateWithURL(url as CFURL, nil), CGImageSourceGetCount(src) > 1 {
+            frames = src
+            frameDelays = (0..<CGImageSourceGetCount(src)).map { Self.delay(of: src, at: $0) }
+            // Keep decoded frames when the whole sequence is under ~256 MB.
+            let bytes = Int(img.size.width * img.size.height) * 4 * frameCount
+            cacheFrames = bytes <= 256 << 20
+            frameIndex = min(keepFrame, frameCount - 1)
+            original = frame(frameIndex)
+            playing = true
+        } else {
+            playing = false
+        }
+        applyRotation()
+        if playing { scheduleNextFrame() }
+    }
+
+    // MARK: - Animation
+
+    /// Delay before the next frame, from whichever container dictionary the file has
+    /// (GIF, PNG / APNG, WebP, HEICS). Browsers treat ≤ 10 ms as 100 ms; so does this.
+    private static func delay(of src: CGImageSource, at i: Int) -> TimeInterval {
+        guard let props = CGImageSourceCopyPropertiesAtIndex(src, i, nil) as? [CFString: Any] else { return 0.1 }
+        let containers: [(CFString, CFString, CFString)] = [
+            (kCGImagePropertyGIFDictionary, kCGImagePropertyGIFUnclampedDelayTime, kCGImagePropertyGIFDelayTime),
+            (kCGImagePropertyPNGDictionary, kCGImagePropertyAPNGUnclampedDelayTime, kCGImagePropertyAPNGDelayTime),
+            (kCGImagePropertyWebPDictionary, kCGImagePropertyWebPUnclampedDelayTime, kCGImagePropertyWebPDelayTime),
+            (kCGImagePropertyHEICSDictionary, kCGImagePropertyHEICSUnclampedDelayTime, kCGImagePropertyHEICSDelayTime),
+        ]
+        for (dict, unclamped, clamped) in containers {
+            guard let d = props[dict] as? [CFString: Any] else { continue }
+            let v = (d[unclamped] as? Double) ?? (d[clamped] as? Double) ?? 0.1
+            return v <= 0.01 ? 0.1 : v
+        }
+        return 0.1
+    }
+
+    private func frame(_ i: Int) -> NSImage? {
+        if let cached = frameCache[i] { return cached }
+        guard let frames, let cg = CGImageSourceCreateImageAtIndex(frames, i, [kCGImageSourceShouldCacheImmediately: true] as CFDictionary) else { return nil }
+        let img = NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
+        if cacheFrames { frameCache[i] = img }
+        return img
+    }
+
+    private func show(frame i: Int) {
+        guard animated else { return }
+        frameIndex = ((i % frameCount) + frameCount) % frameCount
+        original = frame(frameIndex)
         applyRotation()
     }
+
+    private func scheduleNextFrame() {
+        timer?.invalidate()
+        guard animated, playing, canvas.window != nil else { return }
+        let t = Timer(timeInterval: frameDelays[frameIndex], repeats: false) { [weak self] _ in
+            guard let self, self.playing else { return }
+            self.show(frame: self.frameIndex + 1)
+            self.scheduleNextFrame()
+        }
+        t.tolerance = 0.01
+        RunLoop.main.add(t, forMode: .common)
+        timer = t
+    }
+
+    /// Space.
+    func togglePlayback() -> Bool {
+        guard animated else { return false }
+        playing.toggle()
+        if playing { scheduleNextFrame() } else { timer?.invalidate(); timer = nil }
+        badge.update(status ?? "", in: scrollView)
+        onStatusChange?()
+        return true
+    }
+
+    /// `n` / `N`: one frame on, one back; playing stops so the frame stays.
+    func findNext(reverse: Bool) {
+        guard animated else { return }
+        playing = false
+        timer?.invalidate()
+        timer = nil
+        show(frame: frameIndex + (reverse ? -1 : 1))
+    }
+
+    // MARK: - Rotation
 
     /// `r` / `R`.
     func rotate(_ quarterTurns: Int) -> Bool {
@@ -118,12 +229,11 @@ final class ImageDocumentView: NSObject, DocumentView {
 
     func find() {}
     func filter() {}
-    func findNext(reverse: Bool) {}
     func copySelection() {
         guard let image else { return }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.writeObjects([image])
-        Toast.show(in: scrollView, "Copied image")
+        Toast.show(in: scrollView, animated ? "Copied frame \(frameIndex + 1)" : "Copied image")
     }
     func copyRow() { copySelection() }
     func clearSelection() {}
@@ -155,6 +265,8 @@ final class ImageDocumentView: NSObject, DocumentView {
 final class VimImageCanvas: NSView {
     weak var commands: ViewerCommands?
     var onResize: (() -> Void)?
+    /// true when the canvas is in a window (its tab is showing), false when it leaves.
+    var onWindowChange: ((Bool) -> Void)?
     private var keys = VimKeyMap()
 
     override var isFlipped: Bool { true }
@@ -170,6 +282,11 @@ final class VimImageCanvas: NSView {
         if let clip = enclosingScrollView?.contentView {
             NotificationCenter.default.addObserver(forName: NSView.frameDidChangeNotification, object: clip, queue: .main) { [weak self] _ in self?.onResize?() }
         }
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        onWindowChange?(window != nil)
     }
 
     override func cancelOperation(_ sender: Any?) {}

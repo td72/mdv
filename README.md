@@ -90,7 +90,9 @@ and a badge in the corner (and the window subtitle) shows the page. `p` (or View
 The choice is remembered; `pdf_mode = "page"` in the config makes it the default. `t` (View › PDF: Page Overview,
 `⌘⇧T`) replaces the document with a grid of all pages: `h` / `j` / `k` / `l` / `gg` / `G` move the cursor, Enter or `i`
 (or a double-click) opens that page, Esc or `t` goes back to where you were. Images (png, jpg, gif, heic, webp, tiff, …) are fitted to the width and
-centered; `+` / `-` / `=` zoom, `r` / `R` rotate, `y` copies the image. Relative links to other Markdown or source files open in the same tab. `http(s)` / `mailto` links open in the default
+centered; `+` / `-` / `=` zoom, `r` / `R` rotate, `y` copies the image. Animated GIF / WebP / APNG / HEICS play frame by
+frame (so rotation and zoom apply to every frame) with the frame number in the badge: Space pauses and resumes, `n` / `N`
+step one frame; a hidden tab stops the timer. Relative links to other Markdown or source files open in the same tab. `http(s)` / `mailto` links open in the default
 browser; links to other local files are revealed in Finder rather than launched, and other URL schemes are ignored.
 Drop files on the window to open them in new tabs.
 
@@ -118,6 +120,7 @@ Drop files on the window to open them in new tabs.
 | `q` | close the tab; the last one leaves an empty window, and `q` there closes the window (the app quits with its last window) |
 | `Esc` | clear pending count / selection |
 | `?` | key help for the current view as an overlay (Help › Keyboard Shortcuts, `⌘/`); `?` / `Esc` / `q` closes it |
+| `Space`, `n` / `N` | animated images: pause / play, step a frame |
 
 In a table, the same keys move a cell cursor: `j` / `k` rows, `h` / `l` columns (`0` / `$` first / last column),
 `d` / `u` / `b` by (half) pages of rows, `gg` / `G` / `50G`, `/` opens an incremental search over all cells (Enter keeps the hit,
@@ -167,7 +170,7 @@ Only flat `key = value` lines are parsed (no TOML library is linked). Unknown fo
 | `Sources/viw/TextDocumentView.swift` | `DocumentView` for text: rendering, async highlighting, link handling, scrolling, find, snapshot |
 | `Sources/viw/TableDocumentView.swift` | `DocumentView` for tables (CSV / xlsx): NSTableView grid, row cursor, search bar, TSV copy, sheet bar |
 | `Sources/viw/PDFDocumentView.swift` | `DocumentView` for PDFs: PDFKit, find, zoom, rotate |
-| `Sources/viw/ImageDocumentView.swift` | `DocumentView` for images: fit / zoom / rotate |
+| `Sources/viw/ImageDocumentView.swift` | `DocumentView` for images: fit / zoom / rotate, ImageIO frame playback for animated images |
 | `Sources/viw/CSV.swift` | RFC 4180 parser with delimiter and encoding detection |
 | `Sources/viw/ZipArchive.swift` | dependency-free zip reader (central directory, stored / deflate via Compression, CRC-32) for xlsx |
 | `Sources/viw/XLSX.swift` | `Workbook`: sheets / shared strings / styles from the OOXML parts, number-format spelling, byte-level XML scanner |

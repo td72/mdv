@@ -34,6 +34,8 @@ protocol ViewerCommands: AnyObject {
     func selectSheet(offset: Int)
     /// `?`: the key list for the current view.
     func showHelp()
+    /// Space: play / pause where the view plays something (animated images); false → page down.
+    func togglePlayback() -> Bool
     func reload()
     /// `R`: rotate counter-clockwise (PDF / images; `r` rotates clockwise there instead of reloading).
     func rotateBack()
@@ -131,7 +133,7 @@ struct VimKeyMap {
         case "$": c.scrollHorizontal(1_000_000)
         case "d": c.scrollHalfPages(n)
         case "u": c.scrollHalfPages(-n)
-        case " ": flags.contains(.shift) ? c.scrollPages(-n) : c.scrollPages(n)
+        case " ": if !c.togglePlayback() { flags.contains(.shift) ? c.scrollPages(-n) : c.scrollPages(n) }
         case "b": c.scrollPages(-n) // forward is ⌃f / Space / PgDn; `f` is the filter (`b` kept for symmetry with ⌃b)
         case "/": c.find()
         case "f": c.filter()

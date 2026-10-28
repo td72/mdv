@@ -476,6 +476,7 @@ final class OverviewCommands: ViewerCommands {
     func toggleThumbnails() { forward.toggleThumbnails() }
     func selectSheet(offset: Int) { forward.selectSheet(offset: offset) }
     func showHelp() { forward.showHelp() }
+    func togglePlayback() -> Bool { forward.togglePlayback() }
     func reload() {}
     func rotateBack() {}
     func openFile() { forward.openFile() }

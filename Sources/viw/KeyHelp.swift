@@ -75,7 +75,9 @@ enum KeyHelp {
     static let image = Section(title: "Image", entries: [
         Entry("r / R", "rotate clockwise / counter-clockwise"),
         Entry("+ / -   =", "zoom   fit to the window"),
-        Entry("y", "copy the image"),
+        Entry("y", "copy the image (animated: the frame shown)"),
+        Entry("Space", "animated GIF / WebP / PNG: pause / play"),
+        Entry("n / N", "animated: next / previous frame (pauses)"),
     ])
 
     /// `viw -h`.
