@@ -21,6 +21,28 @@ enum Source {
     }
 }
 
+/// How a file is rendered, decided by its name.
+enum FileKind {
+    case markdown
+    case code(String) // tree-sitter language (fence info string)
+    case plain        // unknown extension: one monochrome code block
+
+    static let markdownExtensions: Set<String> = ["md", "markdown", "mdown", "mkd", "mkdn", "txt"]
+
+    static func of(_ url: URL) -> FileKind {
+        let ext = url.pathExtension.lowercased()
+        if markdownExtensions.contains(ext) { return .markdown }
+        if ext.isEmpty {
+            // "Dockerfile" & co. carry the language in the name; anything else without an extension reads as markdown.
+            return Highlighter.language(for: url.lastPathComponent) != nil ? .code(url.lastPathComponent) : .markdown
+        }
+        return Highlighter.language(for: ext) != nil ? .code(ext) : .plain
+    }
+
+    /// Something viw can show as text (used to decide whether a clicked file link opens in place).
+    var isViewable: Bool { if case .plain = self { return false } else { return true } }
+}
+
 /// What a document needs from the window that hosts it as a tab.
 protocol DocumentHost: AnyObject {
     func documentDidChangeTitle(_ doc: DocumentController)
@@ -108,18 +130,20 @@ final class DocumentController: NSObject, NSTextViewDelegate, ViewerCommands {
         theme = Theme.load() // re-read config on every (re)load so `r` picks up edits
         textView.maxContentWidth = theme.maxWidth
         textView.relayoutColumn()
-        let (markdown, baseURL): (String, URL?)
+        let (text, baseURL, kind): (String, URL?, FileKind)
         switch source {
         case .file(let url):
             guard let data = FileManager.default.contents(atPath: url.path) else {
                 show(error: "Cannot read \(url.path)")
                 return
             }
-            markdown = String(decoding: data, as: UTF8.self)
+            text = String(decoding: data, as: UTF8.self)
             baseURL = url
+            kind = FileKind.of(url)
         case .text(let s, _):
-            markdown = s
+            text = s
             baseURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath + "/stdin")
+            kind = .markdown
         }
 
         let timing = ProcessInfo.processInfo.environment["VIW_TIMING"] != nil
@@ -132,18 +156,26 @@ final class DocumentController: NSObject, NSTextViewDelegate, ViewerCommands {
         }
 
         let renderer = MarkdownRenderer(theme: theme, baseURL: baseURL)
-        let (front, body) = splitFrontMatter(markdown)
         let attributed = NSMutableAttributedString()
         var codeBlocks: [MarkdownRenderer.CodeBlockRef] = []
-        if let front {
-            attributed.append(renderer.render(Document(parsing: "```yaml\n\(front)\n```\n")))
-            codeBlocks += renderer.codeBlocks
+        switch kind {
+        case .markdown:
+            let (front, body) = splitFrontMatter(text)
+            if let front {
+                attributed.append(renderer.render(Document(parsing: "```yaml\n\(front)\n```\n")))
+                codeBlocks += renderer.codeBlocks
+            }
+            let document = Document(parsing: body)
+            lap("parse")
+            let offset = attributed.length
+            attributed.append(renderer.render(document))
+            codeBlocks += renderer.codeBlocks.map { var r = $0; r.range.location += offset; return r }
+        case .code(let language):
+            attributed.append(renderer.renderCode(text, language: language))
+            codeBlocks = renderer.codeBlocks
+        case .plain:
+            attributed.append(renderer.renderCode(text, language: nil))
         }
-        let document = Document(parsing: body)
-        lap("parse")
-        let offset = attributed.length
-        attributed.append(renderer.render(document))
-        codeBlocks += renderer.codeBlocks.map { var r = $0; r.range.location += offset; return r }
         lap("render")
 
         textView.textStorage?.setAttributedString(attributed)
@@ -226,10 +258,9 @@ final class DocumentController: NSObject, NSTextViewDelegate, ViewerCommands {
     func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
         guard let url = link as? URL ?? (link as? String).flatMap(URL.init(string:)) else { return false }
         if url.isFileURL {
-            let ext = url.pathExtension.lowercased()
             var isDir: ObjCBool = false
             let exists = FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir)
-            if ["md", "markdown", "mdown", "mkd", "mkdn", "txt", ""].contains(ext), exists, !isDir.boolValue {
+            if exists, !isDir.boolValue, FileKind.of(url).isViewable {
                 open(url)
             } else if exists {
                 // Never hand arbitrary local files to Launch Services (a doc could link to a

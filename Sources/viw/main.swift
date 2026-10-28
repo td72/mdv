@@ -162,7 +162,7 @@ if args.contains("-h") || args.contains("--help") {
     print("""
     viw — vim-keyed viewer (markdown)
 
-    usage: viw [FILE ...]        open files (GFM)
+    usage: viw [FILE ...]        open files (markdown, or source code with syntax highlighting)
            cat FILE | viw        read markdown from stdin
 
     keys:  j/k ^e/^y  line      d/u ^d/^u  half page    f/b ^f/^b space  page

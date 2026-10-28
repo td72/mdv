@@ -57,6 +57,15 @@ final class MarkdownRenderer {
         return out
     }
 
+    /// A whole file as one code block (source files opened directly). `language` nil → plain.
+    func renderCode(_ code: String, language: String?) -> NSAttributedString {
+        out = NSMutableAttributedString()
+        codeBlocks = []
+        pendingMarker = nil
+        codeBlock(code, Context(), dim: false, language: language)
+        return out
+    }
+
     // MARK: - Blocks
 
     private func block(_ node: Markup, _ ctx: Context) {
