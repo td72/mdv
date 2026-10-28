@@ -27,9 +27,12 @@ enum FileKind {
     case json         // pretty-printed, highlighted as JSON
     case jsonl        // JSON Lines: one pretty-printed record per block
     case table        // CSV / TSV: grid view
+    case pdf          // PDFKit
+    case image        // png / jpg / gif / heic / …
     case plain        // unknown extension: one monochrome code block
 
     static let markdownExtensions: Set<String> = ["md", "markdown", "mdown", "mkd", "mkdn", "txt"]
+    static let imageExtensions: Set<String> = ["png", "jpg", "jpeg", "gif", "heic", "heif", "webp", "tiff", "tif", "bmp", "ico"]
 
     static func of(_ url: URL) -> FileKind {
         let ext = url.pathExtension.lowercased()
@@ -37,6 +40,8 @@ enum FileKind {
         if ["json", "jsonc", "json5"].contains(ext) { return .json }
         if ["jsonl", "ndjson"].contains(ext) { return .jsonl }
         if ["csv", "tsv", "tab"].contains(ext) { return .table }
+        if ext == "pdf" { return .pdf }
+        if imageExtensions.contains(ext) { return .image }
         if ext.isEmpty {
             // "Dockerfile" & co. carry the language in the name; anything else without an extension reads as markdown.
             return Highlighter.language(for: url.lastPathComponent) != nil ? .code(url.lastPathComponent) : .markdown
@@ -64,6 +69,9 @@ protocol DocumentView: AnyObject {
     var onOpenFile: ((URL) -> Void)? { get set }
     /// Receiver of the vim keys typed into the content.
     var commands: ViewerCommands? { get set }
+    /// Extra for the window subtitle ("3 / 12" pages, image size); `onStatusChange` fires when it changes.
+    var status: String? { get }
+    var onStatusChange: (() -> Void)? { get set }
 
     /// (Re)load the content. `preserveScroll` keeps the position on reload (file change, zoom).
     func load(source: Source, kind: FileKind, theme: Theme, preserveScroll: Bool)
@@ -95,8 +103,29 @@ protocol DocumentView: AnyObject {
     /// Enter / `i` / `⌃w w`: move focus between the main view and its pane, where the view has one.
     func switchPane()
 
+    /// `+` / `-` / `=`: views with their own scale (PDF, images) return true; text views leave it
+    /// to the theme (font size).
+    func zoomView(_ delta: Int) -> Bool
+    func resetZoomView() -> Bool
+    /// `r` / `R`: quarter turns clockwise; views that can rotate (PDF, images) return true, and
+    /// then `r` rotates instead of reloading (the file watcher and ⌘R still reload).
+    func rotate(_ quarterTurns: Int) -> Bool
+    /// `p`: PDF page view ⇄ continuous; views without pages return false.
+    func togglePageMode() -> Bool
+    /// `t`: PDF page overview; nil where there is none.
+    func toggleThumbnails() -> Bool?
+
     /// Debug: render the whole content to a PNG (VIW_SNAPSHOT).
     func snapshot(to path: String)
+}
+
+extension DocumentView {
+    var status: String? { nil }
+    func zoomView(_ delta: Int) -> Bool { false }
+    func resetZoomView() -> Bool { false }
+    func rotate(_ quarterTurns: Int) -> Bool { false }
+    func togglePageMode() -> Bool { false }
+    func toggleThumbnails() -> Bool? { nil }
 }
 
 /// What a document needs from the window that hosts it as a tab.
@@ -142,13 +171,23 @@ final class DocumentController: NSObject, ViewerCommands {
 
     private func bind(_ v: DocumentView) {
         v.onOpenFile = { [weak self] url in self?.open(url) }
+        v.onStatusChange = { [weak self] in self.map { $0.host?.documentDidChangeTitle($0) } }
         v.commands = self
     }
 
     /// Which `DocumentView` draws `kind`; the same class is reused across loads.
     private static func viewType(for kind: FileKind) -> DocumentView.Type {
-        if case .table = kind { return TableDocumentView.self }
-        return TextDocumentView.self
+        switch kind {
+        case .table: return TableDocumentView.self
+        case .pdf: return PDFDocumentView.self
+        case .image: return ImageDocumentView.self
+        default: return TextDocumentView.self
+        }
+    }
+
+    /// Window subtitle: the directory, plus the view's status (page, image size).
+    var subtitle: String {
+        [source.subtitle, documentView.status ?? ""].filter { !$0.isEmpty }.joined(separator: " — ")
     }
 
     // MARK: - Loading
@@ -200,7 +239,8 @@ final class DocumentController: NSObject, ViewerCommands {
     func toggleDetail() { documentView.toggleDetail() }
     func switchPane() { documentView.switchPane() }
 
-    func reload() { load() }
+    func reload() { if !documentView.rotate(1) { load() } }
+    func rotateBack() { _ = documentView.rotate(-1) }
     func closeWindow() { host?.close(self) }
     func selectTab(offset: Int) { host?.selectTab(offset: offset) }
     func selectTab(index: Int) { host?.selectTab(index: index) }
@@ -218,6 +258,17 @@ final class DocumentController: NSObject, ViewerCommands {
         }
     }
 
+    /// `p` / View › PDF Page View: one page at a time ⇄ continuous, remembered like the zoom level.
+    func togglePageMode() {
+        guard documentView.togglePageMode() else { return }
+        theme.pdfContinuous.toggle()
+        theme.save()
+        host?.documentDidChangeTitle(self)
+    }
+
+    /// `t` / View › PDF Thumbnails: the page overview.
+    func toggleThumbnails() { _ = documentView.toggleThumbnails() }
+
     /// `I` / View › Detail Pane: right ⇄ bottom, remembered like the zoom level.
     func togglePanePosition() {
         theme.detailPaneOnRight.toggle()
@@ -227,6 +278,7 @@ final class DocumentController: NSObject, ViewerCommands {
     }
 
     func zoom(_ delta: Int) {
+        if documentView.zoomView(delta) { host?.documentDidChangeTitle(self); return }
         let steps: [CGFloat] = [10, 11, 12, 13, 14, 15, 16, 18, 20, 22, 24, 28, 32, 36]
         let i = steps.firstIndex { $0 >= theme.baseSize } ?? 5
         theme.baseSize = steps[max(0, min(steps.count - 1, i + delta))]
@@ -236,6 +288,7 @@ final class DocumentController: NSObject, ViewerCommands {
     }
 
     func resetZoom() {
+        if documentView.resetZoomView() { host?.documentDidChangeTitle(self); return }
         theme.baseSize = theme.defaultSize
         theme.save()
         load()

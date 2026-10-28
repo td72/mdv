@@ -12,6 +12,7 @@ struct Config {
     var codeScale: CGFloat?    // code size relative to body (default 0.88)
     var maxWidth: CGFloat?     // readable column width in points (default 900)
     var detailPane: String?    // table detail pane: "right" (default) or "bottom"
+    var pdfMode: String?       // PDF: "scroll" (continuous, default) or "page"
 
     static var path: URL {
         let env = ProcessInfo.processInfo.environment
@@ -46,6 +47,7 @@ struct Config {
             case "code_scale": c.codeScale = number(value, min: 0.5, max: 1.5)
             case "max_width": c.maxWidth = number(value, min: 300, max: 10_000)
             case "detail_pane": c.detailPane = ["right", "bottom"].contains(value.lowercased()) ? value.lowercased() : nil
+            case "pdf_mode": c.pdfMode = ["scroll", "page"].contains(value.lowercased()) ? value.lowercased() : nil
             default: break
             }
         }

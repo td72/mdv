@@ -118,7 +118,7 @@ final class ViewerWindowController: NSWindowController, NSWindowDelegate, Docume
         guard let window, let doc = current else { return }
         window.title = doc.title
         window.representedURL = doc.source.url
-        window.subtitle = doc.source.subtitle
+        window.subtitle = doc.subtitle
     }
 
     // MARK: - DocumentHost
@@ -162,6 +162,8 @@ final class ViewerWindowController: NSWindowController, NSWindowDelegate, Docume
     @objc func reloadDocument(_ sender: Any?) { current?.reload() }
     @objc func revealInFinder(_ sender: Any?) { current?.revealInFinder() }
     @objc func togglePanePosition(_ sender: Any?) { current?.togglePanePosition() }
+    @objc func togglePageMode(_ sender: Any?) { current?.togglePageMode() }
+    @objc func toggleThumbnails(_ sender: Any?) { current?.toggleThumbnails() }
     @objc func selectNextTab(_ sender: Any?) { selectTab(offset: 1) }
     @objc func selectPreviousTab(_ sender: Any?) { selectTab(offset: -1) }
 

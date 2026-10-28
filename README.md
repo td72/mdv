@@ -1,7 +1,7 @@
 # viw — vim-keyed viewer
 
 A small, fast, native viewer for macOS with vim keybindings. It renders GitHub Flavored Markdown, shows source
-files with syntax highlighting and CSV / TSV as a grid; xlsx and PDF are planned ([#4](https://github.com/td72/viw/issues/4)). It was called `mdv` until
+files with syntax highlighting, CSV / TSV as a grid, PDFs and images; xlsx is planned ([#4](https://github.com/td72/viw/issues/4)). It was called `mdv` until
 v0.2; the old `~/.config/mdv/config.toml` is still read until you move it.
 
 - **Native AppKit** — `NSTextView` + TextKit 1, no WebView, no Electron. Opens in well under a second, a 4,500-line document parses, renders and lays out in ~150 ms.
@@ -39,6 +39,7 @@ viw README.md               # open a file (several files → several tabs)
 viw main.swift config.toml  # source files open as one highlighted code block
 viw data.json log.jsonl     # JSON is pretty-printed (key order kept); JSON Lines → one box per record
 viw export.csv data.tsv     # delimited text as a grid (RFC 4180 quoting, delimiter / encoding detected)
+viw paper.pdf photo.png     # PDF (PDFKit) and images, fitted to the window
 cat notes.md | viw          # read from stdin
 open -a viw README.md       # or double-click / drag a .md onto the Dock icon
 ```
@@ -59,7 +60,16 @@ gets a type inferred from its cells (integer, number, boolean, date or text, sho
 pane): numeric columns are right-aligned and sorting compares by type (numbers as numbers, dates by date, booleans
 false < true, text case-insensitively) while the cell text stays exactly as written. Quoted fields (commas, `""`, line breaks inside) follow RFC 4180; the delimiter (`,` `\t` `;`) is
 guessed from the first lines and the encoding is UTF-8 with a Shift_JIS fallback for CSVs that Excel writes.
-100k rows × 20 columns parse in about 0.1 s; past 500k rows the rest is cut off with a notice. Relative links to other Markdown or source files open in the same tab. `http(s)` / `mailto` links open in the default
+100k rows × 20 columns parse in about 0.1 s; past 500k rows the rest is cut off with a notice.
+
+`.pdf` opens with PDFKit, continuous and fitted to the width: the usual keys scroll, `gg` / `G` / `50G` move through
+the document, `/` finds (all hits highlighted, `n` / `N` step through them), `+` / `-` / `=` zoom, `r` / `R` rotate,
+and a badge in the corner (and the window subtitle) shows the page. `p` (or View › PDF, `⌘⇧P`) switches to a page view, one page at a time:
+`j` / `k` scroll the page and flip at its edges, `d` / `u` / `Ctrl-f` / `b` flip pages, `gg` / `G` / `50G` pick a page.
+The choice is remembered; `pdf_mode = "page"` in the config makes it the default. `t` (View › PDF: Page Overview,
+`⌘⇧T`) replaces the document with a grid of all pages: `h` / `j` / `k` / `l` / `gg` / `G` move the cursor, Enter or `i`
+(or a double-click) opens that page, Esc or `t` goes back to where you were. Images (png, jpg, gif, heic, webp, tiff, …) are fitted to the width and
+centered; `+` / `-` / `=` zoom, `r` / `R` rotate, `y` copies the image. Relative links to other Markdown or source files open in the same tab. `http(s)` / `mailto` links open in the default
 browser; links to other local files are revealed in Finder rather than launched, and other URL schemes are ignored.
 Drop files on the window to open them in new tabs.
 
@@ -78,7 +88,7 @@ Drop files on the window to open them in new tabs.
 | `f` | filter rows (tables); in a text document the same as `/` |
 | `n` / `N` | next / previous match |
 | `y` | copy the selection |
-| `r` | reload |
+| `r` | reload (PDF / images: rotate clockwise; `R` counter-clockwise) |
 | `o` | open file… (in a new tab) |
 | `gt` / `gT`, `Tab` / `Shift-Tab` | next / previous tab |
 | `3gt` | go to tab 3 |
@@ -118,6 +128,7 @@ size = 16                     # base font size in points; `=` resets zoom to thi
 code_scale = 0.85             # code size relative to body
 max_width = 948               # readable column width in points
 detail_pane = "right"         # default side for the CSV detail pane: "right" or "bottom" (`I` switches at runtime)
+pdf_mode = "scroll"           # PDF: "scroll" (continuous) or "page" (one page at a time; `p` switches at runtime)
 ```
 
 Only flat `key = value` lines are parsed (no TOML library is linked). Unknown fonts fall back to the defaults with a warning on stderr.
@@ -131,6 +142,8 @@ Only flat `key = value` lines are parsed (no TOML library is linked). Unknown fo
 | `Sources/viw/Document.swift` | `Source` / `FileKind`, the `DocumentView` protocol, and `DocumentController` (one tab: file, theme, watcher, vim commands) |
 | `Sources/viw/TextDocumentView.swift` | `DocumentView` for text: rendering, async highlighting, link handling, scrolling, find, snapshot |
 | `Sources/viw/TableDocumentView.swift` | `DocumentView` for delimited data: NSTableView grid, row cursor, search bar, TSV copy |
+| `Sources/viw/PDFDocumentView.swift` | `DocumentView` for PDFs: PDFKit, find, zoom, rotate |
+| `Sources/viw/ImageDocumentView.swift` | `DocumentView` for images: fit / zoom / rotate |
 | `Sources/viw/CSV.swift` | RFC 4180 parser with delimiter and encoding detection |
 | `Sources/viw/VimKeys.swift` | `ViewerCommands` and the vim key map shared by the text and table views |
 | `Sources/viw/Toast.swift` | the short-lived "Copied …" pill |
