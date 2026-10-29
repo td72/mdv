@@ -27,23 +27,53 @@ final class Workbook {
         styles = zip.entries["xl/styles.xml"] != nil ? Styles(try zip.data(for: "xl/styles.xml")) : Styles()
     }
 
-    /// The sheet as a table: the first row is the header, like a CSV. Rows past `CSV.maxRows`
-    /// are dropped (the dimension tells how many there were).
-    func table(forSheet i: Int) throws -> TableData {
-        let parser = SheetParser(strings: sharedStrings, styles: styles, date1904: date1904)
+    private var parsedSheets: [Int: ParsedSheet] = [:]
+
+    /// The sheet's cells, parsed once and kept (formulas on other sheets may refer to them).
+    func parsed(sheet i: Int) throws -> ParsedSheet {
+        if let p = parsedSheets[i] { return p }
+        let parser = SheetParser(strings: sharedStrings)
         parser.run(try zip.data(for: sheets[i].path))
-        var rows = parser.rows
-        // Formatting-only cells leave empty rows / columns at the edges: drop them.
-        while let last = rows.last, last.allSatisfy(\.isEmpty) { rows.removeLast() }
+        parsedSheets[i] = parser.sheet
+        return parser.sheet
+    }
+
+    /// The sheet as a table: the first row is the header, like a CSV. Formulas without a
+    /// cached value are evaluated where `Formula` can (references, arithmetic). Rows past
+    /// `CSV.maxRows` are dropped (the dimension tells how many there were).
+    func table(forSheet i: Int) throws -> TableData {
+        let sheet = try parsed(sheet: i)
+        let spelling = Spelling(date1904: date1904)
+        let cells = WorkbookCells(workbook: self, sheet: i)
+        var rows: [[String]] = []
+        var formulas: [Int: [Int: String]] = [:] // by sheet row index (header included), then column
+        rows.reserveCapacity(sheet.cells.count)
+        for (r, row) in sheet.cells.enumerated() {
+            var out: [String] = []
+            out.reserveCapacity(row.count)
+            for (c, cell) in row.enumerated() {
+                var value = cell.value
+                if let f = cell.formula {
+                    formulas[r, default: [:]][c] = f
+                    if !cell.hasCachedValue { value = cells.value(sheetIndex: i, row: r + 1, column: c) ?? .empty }
+                }
+                out.append(Self.spell(value, format: styles.format(forStyle: cell.style), spelling: spelling))
+            }
+            rows.append(out)
+        }
+        // Formatting-only cells leave empty rows / columns at the edges: drop them (a formula counts as content).
+        func filled(_ r: Int, _ c: Int) -> Bool { (c < rows[r].count && !rows[r][c].isEmpty) || formulas[r]?[c] != nil }
+        while let last = rows.indices.last, !rows[last].indices.contains(where: { filled(last, $0) }) { rows.removeLast(); formulas[last] = nil }
         var width = rows.map(\.count).max() ?? 0
-        while width > 0, rows.allSatisfy({ $0.count < width || $0[width - 1].isEmpty }) { width -= 1 }
+        while width > 0, !rows.indices.contains(where: { filled($0, width - 1) }) { width -= 1 }
         for r in rows.indices {
             if rows[r].count < width { rows[r].append(contentsOf: repeatElement("", count: width - rows[r].count)) }
             else if rows[r].count > width { rows[r].removeSubrange(width...) }
         }
         guard !rows.isEmpty else { return TableData(header: [], rows: [], totalRows: 0) }
-        var table = TableData(header: rows[0], rows: Array(rows.dropFirst()), totalRows: max(rows.count, parser.truncatedTotal ?? 0))
-        table.columnWidths = (0..<width).map { parser.columnWidths[$0] }
+        var table = TableData(header: rows[0], rows: Array(rows.dropFirst()), totalRows: max(rows.count, sheet.truncatedTotal ?? 0))
+        table.columnWidths = (0..<width).map { sheet.columnWidths[$0] }
+        for (r, cols) in formulas where r >= 1 { table.formulas[r - 1] = cols } // data rows: header formulas are not shown
         table.inferTypes()
         return table
     }
@@ -223,24 +253,29 @@ final class Workbook {
         }
     }
 
-    /// `<v>` text of a numeric cell → what the grid shows for its style. Integers (ids, counts)
-    /// are kept exactly as stored under General so a 13-digit code is not rounded.
-    static func spell(_ raw: String, format: Styles.Format, spelling: Spelling) -> String {
+    /// A cell's value → what the grid shows for its style.
+    static func spell(_ v: Formula.Value, format: Styles.Format, spelling: Spelling) -> String {
+        switch v {
+        case .empty: return ""
+        case .text(let s): return s
+        case .bool(let b): return b ? "TRUE" : "FALSE"
+        case .error(let e): return e
+        case .number(let d): return spell(number: d, format: format, spelling: spelling)
+        }
+    }
+
+    /// Numbers: `General` keeps integers exact and shows ~10 significant digits otherwise
+    /// (hiding 0.1 + 0.2 noise); number formats give decimals / grouping / percent; date
+    /// formats turn the serial into a date / time.
+    static func spell(number d: Double, format: Styles.Format, spelling: Spelling) -> String {
         switch format {
-        case .text: return raw
-        case .general:
-            if let i = Int(raw) { return i == 0 ? "0" : raw } // "-0" → 0
-            guard let v = Double(raw) else { return raw }
-            let s = String(format: "%.10g", v) // Excel's General shows ~11 significant digits: hides 0.1 + 0.2 noise
-            return s.contains("e") ? raw : s
+        case .text, .general: return Formula.spellGeneral(d)
         case .number(let decimals, let grouping, let percent):
-            guard var v = Double(raw) else { return raw }
-            if percent { v *= 100 }
-            guard let s = spelling.formatter(decimals: decimals, grouping: grouping).string(from: v as NSNumber) else { return raw }
+            let v = percent ? d * 100 : d
+            guard let s = spelling.formatter(decimals: decimals, grouping: grouping).string(from: v as NSNumber) else { return Formula.spellGeneral(d) }
             return percent ? s + "%" : s
         case .date(let date, let time, let seconds, let elapsed):
-            guard let v = Double(raw) else { return raw }
-            return spellDate(serial: v, date: date, time: time, seconds: seconds, elapsed: elapsed, date1904: spelling.date1904)
+            return spellDate(serial: d, date: date, time: time, seconds: seconds, elapsed: elapsed, date1904: spelling.date1904)
         }
     }
 
@@ -301,42 +336,104 @@ final class Workbook {
     }
 }
 
-/// Streams one `sheetN.xml`: `<row>` / `<c r= s= t=>` / `<v>` / `<is><t>` into rows of strings.
+/// One cell as read from the sheet: its typed value (`.empty` when a formula has no cached
+/// value), the style index and the formula text, if any.
+struct RawCell {
+    var value: Formula.Value
+    var style: Int?
+    var formula: String?
+    var hasCachedValue: Bool
+}
+
+/// The cells of one sheet, by row (sheet row r is `cells[r - 1]`; rows are ragged).
+final class ParsedSheet {
+    var cells: [[RawCell]] = []
+    /// Custom widths from `<cols>`, in characters, by zero-based column.
+    var columnWidths: [Int: Double] = [:]
+    /// Row count from `<dimension>`, when rows had to be dropped.
+    var truncatedTotal: Int?
+
+    func cell(row: Int, column: Int) -> RawCell? {
+        guard row >= 1, row <= cells.count, column >= 0, column < cells[row - 1].count else { return nil }
+        return cells[row - 1][column]
+    }
+}
+
+/// Reference resolution for `Formula`: cells by sheet name, with formulas that have no
+/// cached value evaluated on demand (memoised; a cycle or an unsupported formula in the
+/// chain leaves the dependent cell empty too).
+final class WorkbookCells: FormulaCells {
+    private unowned let workbook: Workbook
+    private var currentSheet: Int
+    private var memo: [String: Formula.Value?] = [:]
+    private var visiting: Set<String> = []
+
+    init(workbook: Workbook, sheet: Int) {
+        self.workbook = workbook
+        currentSheet = sheet
+    }
+
+    func value(sheet name: String?, row: Int, column: Int) -> Formula.Value? {
+        var index = currentSheet
+        if let name {
+            guard let i = workbook.sheets.firstIndex(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame }) else { return .error("#REF!") }
+            index = i
+        }
+        return value(sheetIndex: index, row: row, column: column)
+    }
+
+    /// nil: the cell depends on something the evaluator cannot do (so stays empty).
+    func value(sheetIndex i: Int, row: Int, column: Int) -> Formula.Value? {
+        guard let sheet = try? workbook.parsed(sheet: i) else { return .error("#REF!") }
+        guard let cell = sheet.cell(row: row, column: column) else { return .empty }
+        guard let f = cell.formula, !cell.hasCachedValue else { return cell.value }
+        let key = "\(i):\(row):\(column)"
+        if let v = memo[key] { return v }
+        if visiting.contains(key) || visiting.count > 64 { return .error("#REF!") } // circular
+        visiting.insert(key)
+        let saved = currentSheet
+        currentSheet = i
+        let v = Formula.evaluate(f, cells: self)
+        currentSheet = saved
+        visiting.remove(key)
+        memo[key] = v
+        return v
+    }
+}
+
+/// Streams one `sheetN.xml`: `<row>` / `<c r= s= t=>` / `<v>` / `<f>` / `<is><t>` into typed cells.
 private final class SheetParser {
     private let strings: [String]
-    private let styles: Workbook.Styles
-    private let spelling: Workbook.Spelling
-
-    private(set) var rows: [[String]] = []
-    /// Custom widths from `<cols>`, in characters, by zero-based column.
-    private(set) var columnWidths: [Int: Double] = [:]
-    /// Row count from `<dimension>`, when rows had to be dropped.
-    private(set) var truncatedTotal: Int?
+    let sheet = ParsedSheet()
     private var dimensionRows = 0
 
-    private var row: [String] = []
+    private var row: [RawCell] = []
     private var rowNumber = 0        // 1-based, of the row being filled
     private var column = -1          // last filled column in the row
-    private enum CellType { case number, shared, boolean, other } // t= absent / "n", "s", "b", the rest (str, inlineStr, e, d)
+    private enum CellType { case number, shared, boolean, error, other } // t= absent / "n", "s", "b", "e", the rest (str, inlineStr, d)
     private var cellType = CellType.number
     private var cellStyle: Int?
     private var text = ""
+    private var hasValue = false
+    private var formula: String?
+    private var formulaText = ""
+    private var formulaShared: (si: String, master: Bool)?
+    /// Shared formulas: the master cell's text and position, by `si`; dependents shift its references.
+    private var sharedMasters: [String: (text: String, row: Int, column: Int)] = [:]
     private var collecting = false
+    private var collectingFormula = false
     private var inInlineString = false
     private var inRPh = false
 
-    init(strings: [String], styles: Workbook.Styles, date1904: Bool) {
-        self.strings = strings
-        self.styles = styles
-        spelling = Workbook.Spelling(date1904: date1904)
-    }
+    init(strings: [String]) { self.strings = strings }
 
     func run(_ data: Data) {
         XMLScanner.scan(data) { token in
             switch token {
             case .start(let tag, let selfClosing): start(tag, selfClosing)
             case .end(let tag): end(tag)
-            case .text(let s): if collecting { text += s() }
+            case .text(let s):
+                if collecting { text += s() } else if collectingFormula { formulaText += s() }
             }
         }
         flushRow()
@@ -345,8 +442,8 @@ private final class SheetParser {
     private func flushRow() {
         guard rowNumber > 0 else { return }
         // Skipped (empty) rows between r attributes become empty rows, so row numbers stay true.
-        while rows.count < rowNumber - 1 { rows.append([]) }
-        rows.append(row)
+        while sheet.cells.count < rowNumber - 1 { sheet.cells.append([]) }
+        sheet.cells.append(row)
         row = []
         rowNumber = 0
         column = -1
@@ -359,22 +456,31 @@ private final class SheetParser {
             case nil, "n": cellType = .number
             case "s": cellType = .shared
             case "b": cellType = .boolean
+            case "e": cellType = .error
             default: cellType = .other
             }
             cellStyle = tag.attribute("s").flatMap(Int.init)
             text = ""
+            hasValue = false
+            formula = nil
             if selfClosing { cellType = .other } // formatting only: no value
         } else if tag.is("v") {
             text = ""
             collecting = !selfClosing
+            hasValue = true
+        } else if tag.is("f") {
+            formulaText = ""
+            collectingFormula = !selfClosing
+            formulaShared = tag.attribute("t") == "shared" ? (tag.attribute("si") ?? "", tag.attribute("ref") != nil) : nil
+            if selfClosing { endFormula() }
         } else if tag.is("t") {
             // <t> inside <is> (inline string); <rPh> (phonetic) is skipped.
             collecting = inInlineString && !inRPh && !selfClosing
         } else if tag.is("row") {
             flushRow()
-            rowNumber = tag.attribute("r").flatMap(Int.init) ?? rows.count + 1
+            rowNumber = tag.attribute("r").flatMap(Int.init) ?? sheet.cells.count + 1
             if rowNumber > CSV.maxRows + 1 {
-                truncatedTotal = max(dimensionRows, rowNumber)
+                sheet.truncatedTotal = max(dimensionRows, rowNumber)
                 rowNumber = 0
                 XMLScanner.stop()
             }
@@ -385,26 +491,47 @@ private final class SheetParser {
         } else if tag.is("col") {
             guard let min = tag.attribute("min").flatMap(Int.init), let max = tag.attribute("max").flatMap(Int.init),
                   let w = tag.attribute("width").flatMap(Double.init), w > 0 else { return }
-            for c in min...Swift.min(max, min + 1000) { columnWidths[c - 1] = w }
+            for c in min...Swift.min(max, min + 1000) { sheet.columnWidths[c - 1] = w }
         }
+    }
+
+    /// `</f>`: a plain formula is its text; a shared master registers itself; a shared
+    /// dependent (empty `<f t="shared" si="n"/>`) takes the master's text with references moved.
+    private func endFormula() {
+        collectingFormula = false
+        if let shared = formulaShared {
+            if shared.master || !formulaText.isEmpty {
+                sharedMasters[shared.si] = (formulaText, rowNumber, column)
+                formula = formulaText
+            } else if let m = sharedMasters[shared.si] {
+                formula = Formula.shift(m.text, rows: rowNumber - m.row, columns: column - m.column)
+            }
+        } else if !formulaText.isEmpty {
+            formula = formulaText
+        }
+        formulaShared = nil
     }
 
     private func end(_ tag: XMLScanner.Tag) {
         if tag.is("c") {
-            let value: String
+            let value: Formula.Value
             switch cellType {
-            case .shared: value = Int(text).flatMap { $0 < strings.count ? strings[$0] : nil } ?? ""
-            case .boolean: value = text == "1" ? "TRUE" : "FALSE"
-            case .number: value = text.isEmpty ? "" : Workbook.spell(text, format: styles.format(forStyle: cellStyle), spelling: spelling)
-            case .other: value = text // str (formula result), inlineStr, e (error text), d (ISO date)
+            case .shared: value = Int(text).flatMap { $0 < strings.count ? .text(strings[$0]) : nil } ?? .empty
+            case .boolean: value = hasValue ? .bool(text == "1") : .empty
+            case .number: value = Double(text).map { .number($0) } ?? .empty
+            case .error: value = text.isEmpty ? .empty : .error(text)
+            case .other: value = text.isEmpty ? .empty : .text(text) // str (formula result), inlineStr, d (ISO date)
             }
-            if column >= 0, !value.isEmpty {
-                while row.count < column { row.append("") }
-                if row.count == column { row.append(value) } else { row[column] = value }
+            if column >= 0, value != .empty || formula != nil {
+                while row.count < column { row.append(RawCell(value: .empty, style: nil, formula: nil, hasCachedValue: false)) }
+                let cell = RawCell(value: value, style: cellStyle, formula: formula, hasCachedValue: hasValue && !text.isEmpty)
+                if row.count == column { row.append(cell) } else { row[column] = cell }
             }
             text = ""
             cellType = .number
+            formula = nil
         } else if tag.is("v") || tag.is("t") { collecting = false }
+        else if tag.is("f") { if collectingFormula { endFormula() } }
         else if tag.is("row") { flushRow() }
         else if tag.is("is") { inInlineString = false }
         else if tag.is("rPh") { inRPh = false }
