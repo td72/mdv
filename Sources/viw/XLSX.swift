@@ -57,7 +57,7 @@ final class Workbook {
                     formulas[r, default: [:]][c] = f
                     if !cell.hasCachedValue { value = cells.value(sheetIndex: i, row: r + 1, column: c) ?? .empty }
                 }
-                out.append(Self.spell(value, format: styles.format(forStyle: cell.style), spelling: spelling))
+                out.append(Self.spell(value, raw: cell.raw, format: styles.format(forStyle: cell.style), spelling: spelling))
             }
             rows.append(out)
         }
@@ -253,14 +253,24 @@ final class Workbook {
         }
     }
 
-    /// A cell's value → what the grid shows for its style.
-    static func spell(_ v: Formula.Value, format: Styles.Format, spelling: Spelling) -> String {
+    /// A cell's value → what the grid shows for its style. `raw` is the stored text of a number
+    /// that General would respell (kept for General and text formats).
+    static func spell(_ v: Formula.Value, raw: String? = nil, format: Styles.Format, spelling: Spelling) -> String {
         switch v {
         case .empty: return ""
         case .text(let s): return s
         case .bool(let b): return b ? "TRUE" : "FALSE"
         case .error(let e): return e
-        case .number(let d): return spell(number: d, format: format, spelling: spelling)
+        case .number(let d):
+            if let raw {
+                if format == .text { return raw }
+                if format == .general { // integers (with leading zeros) and exponents as stored; decimals through %.10g
+                    if let i = Int(raw) { return i == 0 ? "0" : raw }
+                    let s = String(format: "%.10g", d)
+                    return s.contains("e") ? raw : s
+                }
+            }
+            return spell(number: d, format: format, spelling: spelling)
         }
     }
 
@@ -340,6 +350,8 @@ final class Workbook {
 /// value), the style index and the formula text, if any.
 struct RawCell {
     var value: Formula.Value
+    /// The `<v>` text of a number when General would spell it differently ("00123", "1.5E-7"): shown as stored.
+    var raw: String?
     var style: Int?
     var formula: String?
     var hasCachedValue: Bool
@@ -523,8 +535,10 @@ private final class SheetParser {
             case .other: value = text.isEmpty ? .empty : .text(text) // str (formula result), inlineStr, d (ISO date)
             }
             if column >= 0, value != .empty || formula != nil {
-                while row.count < column { row.append(RawCell(value: .empty, style: nil, formula: nil, hasCachedValue: false)) }
-                let cell = RawCell(value: value, style: cellStyle, formula: formula, hasCachedValue: hasValue && !text.isEmpty)
+                while row.count < column { row.append(RawCell(value: .empty, raw: nil, style: nil, formula: nil, hasCachedValue: false)) }
+                var raw: String?
+                if case .number(let d) = value, Formula.spellGeneral(d) != text { raw = text }
+                let cell = RawCell(value: value, raw: raw, style: cellStyle, formula: formula, hasCachedValue: hasValue && !text.isEmpty)
                 if row.count == column { row.append(cell) } else { row[column] = cell }
             }
             text = ""

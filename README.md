@@ -31,6 +31,7 @@ Or just `mise r app` and drag `build/viw.app` wherever you like. `swift build -c
 | `mise r run [file]` | build and open a file |
 | `mise r snapshot [file] [-o out.png] [--dark] [--width 700]` | render to PNG (debug) |
 | `mise r clean` | remove `.build` and `build` |
+| `mise r test` | run the logic tests (`swift test` with the toolchain's swift-testing plugin, so the Command Line Tools suffice) |
 
 ## Usage
 

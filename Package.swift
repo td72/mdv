@@ -22,5 +22,13 @@ let package = Package(
             ],
             path: "Sources/viw"
         ),
+        // Logic tests (`swift test` / `mise r test`): the executable target is imported @testable,
+        // so no code moves; fixtures (xlsx / zip) come from Bundle.module.
+        .testTarget(
+            name: "viwTests",
+            dependencies: ["viw"],
+            path: "Tests/viwTests",
+            resources: [.copy("Fixtures")]
+        ),
     ]
 )
