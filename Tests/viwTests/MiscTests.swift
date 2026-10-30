@@ -109,6 +109,13 @@ import Testing
         #expect({ if case .code("Dockerfile") = kind("Dockerfile") { return true } else { return false } }())
         #expect({ if case .code("swift") = kind("a.swift") { return true } else { return false } }())
         #expect({ if case .json = kind("a.json") { return true } else { return false } }())
+        #expect({ if case .json = kind("a.json5") { return true } else { return false } }())
+        #expect({ if case .markdown = kind("a.mdwn") { return true } else { return false } }())
+        #expect({ if case .code("jl") = kind("a.jl") { return true } else { return false } }())
+        #expect({ if case .code("pl") = kind("a.pl") { return true } else { return false } }())
+        #expect({ if case .code("ts") = kind("a.ts") { return true } else { return false } }())   // TypeScript, not MPEG-TS
+        #expect({ if case .code("c++") = kind("a.c++") { return true } else { return false } }())
+        #expect({ if case .code("xml") = kind("a.xml") { return true } else { return false } }())
         #expect({ if case .jsonl = kind("a.ndjson") { return true } else { return false } }())
         #expect({ if case .table = kind("a.tsv") { return true } else { return false } }())
         #expect({ if case .workbook = kind("a.XLSX") { return true } else { return false } }())

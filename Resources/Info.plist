@@ -29,7 +29,7 @@
             <key>CFBundleTypeExtensions</key>
             <array>
                 <string>md</string><string>markdown</string><string>mdown</string>
-                <string>mkd</string><string>mkdn</string><string>txt</string>
+                <string>mkd</string><string>mkdn</string><string>mdwn</string><string>txt</string>
             </array>
         </dict>
         <dict>
@@ -116,6 +116,9 @@
                 <string>json</string><string>jsonl</string><string>ndjson</string><string>jsonc</string><string>yaml</string><string>yml</string><string>toml</string>
                 <string>sh</string><string>bash</string><string>zsh</string><string>sql</string><string>html</string><string>htm</string><string>css</string>
                 <string>dockerfile</string>
+                <string>jl</string><string>pl</string><string>pm</string><string>mli</string><string>mod</string><string>sc</string>
+                <string>v</string><string>agda</string><string>jav</string><string>c++</string><string>cts</string>
+                <string>json5</string><string>xml</string>
             </array>
         </dict>
     </array>
