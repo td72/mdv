@@ -27,7 +27,7 @@ import Testing
         #expect(regions.rows[5][0] == "merged title cell")
         #expect(regions.rows[5][2] == "0.3")              // 0.1 + 0.2 under General
         #expect(regions.rows[5][3] == "1234567890123")     // integers stay exact
-        #expect(regions.rows[5][4] == "")                  // =SUM(...) with no cached value: not evaluated
+        #expect(regions.rows[5][4] == "25888.7")           // =SUM(B2:E5) with no cached value, evaluated
         #expect(regions.formulas[5]?[4] == "SUM(B2:E5)")
     }
 
@@ -40,8 +40,9 @@ import Testing
         #expect(t.rows[2] == ["sum", "150", "151", "24000", "135"])
         #expect(t.rows[3] == ["cross", "120", "18000", "15", "#DIV/0!"])   // other sheet, quoted name
         #expect(t.rows[4] == ["chain", "240", "57600", "-18000", "TRUE"])
-        #expect(t.rows[5] == ["func", "", "3", "TRUE", "#REF!"])            // SUM stays empty; E7/E8 circular
+        #expect(t.rows[5] == ["func", "150", "3", "TRUE", "#REF!"])         // SUM over a range; E7/E8 circular
         #expect(t.rows[6][1] == "#REF!")
+        #expect(t.rows[7] == ["func2", "many", "2571.43", "8", "18,000"])
         #expect(t.formulas[0]?[3] == "B2*C2")
         #expect(t.formulas[3]?[2] == "'売上'!E2")
         #expect(t.formulas[5]?[1] == "SUM(B2:B3)")
