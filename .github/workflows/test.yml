@@ -12,7 +12,7 @@ jobs:
         id: swift
         run: |
           swift --version
-          echo "version=$(swift --version 2>&1 | head -1 | tr -d ' ')" >> "$GITHUB_OUTPUT"
+          echo "version=$(swift --version 2>&1 | sed -n 's/.*Apple Swift version \([0-9.]*\).*/\1/p')" >> "$GITHUB_OUTPUT"
       # The dependency checkouts (CodeEditLanguages is a 3 GB clone whose download has failed mid-way)
       # plus the binary artifacts and workspace-state are enough for SwiftPM to build offline; the
       # git mirrors under .build/repositories are not needed and are left out.
