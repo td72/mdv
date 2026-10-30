@@ -100,7 +100,7 @@ and a badge in the corner (and the window subtitle) shows the page. `p` (or View
 `j` / `k` scroll the page and flip at its edges, `d` / `u` / `Ctrl-f` / `b` flip pages, `gg` / `G` / `50G` pick a page.
 The choice is remembered; `pdf_mode = "page"` in the config makes it the default. `t` (View › PDF: Page Overview,
 `⌘⇧T`) replaces the document with a grid of all pages: `h` / `j` / `k` / `l` / `gg` / `G` move the cursor, Enter or `i`
-(or a double-click) opens that page, Esc or `t` goes back to where you were. Images (png, jpg, gif, heic, webp, tiff, …) are fitted to the width and
+(or a double-click) opens that page, Esc or `t` goes back to where you were. Images (png, jpg, gif, heic, webp, tiff, svg, …) are fitted to the width and
 centered; `+` / `-` / `=` zoom, `r` / `R` rotate, `y` copies the image. Animated GIF / WebP / APNG / HEICS play frame by
 frame (so rotation and zoom apply to every frame) with the frame number in the badge: Space pauses and resumes, `n` / `N`
 step one frame; a hidden tab stops the timer.

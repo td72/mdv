@@ -121,6 +121,7 @@ import Testing
         #expect({ if case .workbook = kind("a.XLSX") { return true } else { return false } }())
         #expect({ if case .pdf = kind("a.pdf") { return true } else { return false } }())
         #expect({ if case .image = kind("a.webp") { return true } else { return false } }())
+        #expect({ if case .image = kind("a.svg") { return true } else { return false } }())
         #expect({ if case .video = kind("a.mkv") { return true } else { return false } }())
         #expect({ if case .audio = kind("a.flac") { return true } else { return false } }())
         #expect({ if case .plain = kind("a.unknownext") { return true } else { return false } }())
