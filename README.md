@@ -84,8 +84,10 @@ Previous Sheet, `⌘]` / `⌘[`) to switch; the window subtitle names the sheet.
 cached result of formulas. The formula itself shows under the value in the detail pane and in the cell's tooltip. A file
 saved without cached values (openpyxl and other libraries write none) gets a small evaluator for the cells that need it:
 references (`B3`, `$B$3`, `Sheet2!C4`, `'売上 2026'!C4`, shared formulas), `+ - * / ^ & %`, comparisons and parentheses,
-with Excel's errors (`#DIV/0!`, `#REF!` for a circular reference, `#VALUE!`); functions are not evaluated yet, so such a
-cell stays empty with its formula in the pane. Number formats are applied in a simple form — dates and times
+with Excel's errors (`#DIV/0!`, `#REF!` for a circular reference, `#VALUE!`), and the common functions with ranges as
+arguments: SUM, PRODUCT, AVERAGE, COUNT, COUNTA, COUNTBLANK, MIN, MAX, ABS, INT, SQRT, MOD, POWER, ROUND / ROUNDUP / ROUNDDOWN, IF,
+IFERROR, AND, OR, NOT, LEN, UPPER, LOWER, TRIM, LEFT, RIGHT, MID, CONCAT / CONCATENATE, TEXT, VALUE, ISBLANK / ISNUMBER / ISTEXT /
+ISERROR. A formula using anything else (VLOOKUP, defined names, whole-column ranges) stays empty with its formula in the pane. Number formats are applied in a simple form — dates and times
 (1900 and 1904 systems, `[h]` elapsed), decimals, thousands grouping, percent; `General` shows up to 10 significant
 digits and keeps integers exact; currency symbols and colors are not rendered — so the grid reads like Excel and the
 column types still infer (`1,234` and `12.5%` count as numbers). Column widths come from the sheet's `<cols>` when the

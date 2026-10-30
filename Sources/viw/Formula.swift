@@ -8,9 +8,9 @@ protocol FormulaCells {
 
 /// Just enough of Excel's formula language to fill in cells that a file saved without
 /// cached values (openpyxl and friends): numbers, strings, references (`A1`, `$A$1`,
-/// `Sheet2!B3`, `'My sheet'!C4`), `+ - * / ^ & %`, comparisons and parentheses. Functions
-/// and ranges in arithmetic throw `Unsupported`, and the cell stays empty with the formula
-/// text in the detail pane.
+/// `Sheet2!B3`, `'My sheet'!C4`), `+ - * / ^ & %`, comparisons, parentheses and the common
+/// functions (`Formula.functions`), with ranges as their arguments. Anything else throws
+/// `Unsupported`, and the cell stays empty with the formula text in the detail pane.
 enum Formula {
     enum Value: Equatable {
         case number(Double)
@@ -301,12 +301,51 @@ enum Formula {
                 guard take() == .rparen else { throw Unsupported(what: ")") }
                 return v
             case .name(let n)?:
-                if n.uppercased() == "TRUE" { return .bool(true) }
-                if n.uppercased() == "FALSE" { return .bool(false) }
-                throw Unsupported(what: n) // functions and defined names: a later step
-            case .range?: throw Unsupported(what: "range")
+                let upper = n.uppercased()
+                if current == .lparen { i += 1; return try Formula.call(upper, try arguments()) }
+                if upper == "TRUE" { return .bool(true) }
+                if upper == "FALSE" { return .bool(false) }
+                throw Unsupported(what: n) // defined names
+            case .range?: throw Unsupported(what: "range outside a function")
             default: throw Unsupported(what: "syntax")
             }
+        }
+
+        /// `(` has been taken: the arguments up to and including `)`; a range argument becomes its cells.
+        private mutating func arguments() throws -> [Arg] {
+            var args: [Arg] = []
+            if current == .rparen { i += 1; return args }
+            while true {
+                if case .range(let a, let b)? = current {
+                    i += 1
+                    args.append(.cells(try rangeValues(a, b)))
+                } else if case .ref(let r)? = current, i + 1 < tokens.count, [.comma, .semicolon, .rparen].contains(tokens[i + 1]) {
+                    // A lone reference is a one-cell range: an empty or text cell is skipped, not coerced (AVERAGE(B3) → #DIV/0!)
+                    i += 1
+                    args.append(.cells(try rangeValues(r, r)))
+                } else {
+                    args.append(.value(try comparison()))
+                }
+                switch take() {
+                case .comma?, .semicolon?: continue
+                case .rparen?: return args
+                default: throw Unsupported(what: "argument list")
+                }
+            }
+        }
+
+        private func rangeValues(_ a: Ref, _ b: Ref) throws -> [Value] {
+            let rows = min(a.row, b.row)...max(a.row, b.row), cols = min(a.column, b.column)...max(a.column, b.column)
+            guard rows.count * cols.count <= 200_000 else { throw Unsupported(what: "range too large") }
+            var out: [Value] = []
+            out.reserveCapacity(rows.count * cols.count)
+            for r in rows {
+                for c in cols {
+                    guard let v = cells.value(sheet: a.sheet, row: r, column: c) else { throw Unsupported(what: "reference") }
+                    out.append(v)
+                }
+            }
+            return out
         }
 
         private func arithmetic(_ a: Value, _ b: Value, _ f: (Double, Double) -> Double) -> Value {
@@ -340,6 +379,191 @@ enum Formula {
             case "<=": return .bool(order <= 0)
             default: return .bool(order >= 0)
             }
+        }
+    }
+
+    // MARK: - Functions
+
+    enum Arg {
+        case value(Value)
+        case cells([Value]) // a range: text, booleans and empties are skipped by the numeric functions, as in Excel
+    }
+
+    /// What `call` understands (for the help / docs).
+    static let functions = ["SUM", "PRODUCT", "AVERAGE", "COUNT", "COUNTA", "COUNTBLANK", "MIN", "MAX", "ABS", "INT", "SQRT", "MOD", "POWER",
+                            "ROUND", "ROUNDUP", "ROUNDDOWN", "IF", "IFERROR", "AND", "OR", "NOT", "TRUE", "FALSE",
+                            "LEN", "UPPER", "LOWER", "TRIM", "LEFT", "RIGHT", "MID", "CONCAT", "CONCATENATE", "TEXT", "VALUE",
+                            "ISBLANK", "ISNUMBER", "ISTEXT", "ISERROR"]
+
+    /// Numbers from the arguments: direct values coerce (and a non-number is `#VALUE!`), cells
+    /// from ranges count only when they hold numbers. The first error wins.
+    private static func numbers(_ args: [Arg]) -> (values: [Double], error: Value?) {
+        var out: [Double] = []
+        for arg in args {
+            switch arg {
+            case .value(let v):
+                if case .error = v { return ([], v) }
+                guard let d = number(of: v) else { return ([], .error("#VALUE!")) }
+                out.append(d)
+            case .cells(let vs):
+                for v in vs {
+                    if case .error = v { return ([], v) }
+                    if case .number(let d) = v { out.append(d) }
+                }
+            }
+        }
+        return (out, nil)
+    }
+
+    private static func flatten(_ args: [Arg]) -> [Value] {
+        args.flatMap { arg -> [Value] in
+            switch arg { case .value(let v): return [v]; case .cells(let vs): return vs }
+        }
+    }
+
+    /// Booleans as Excel coerces them: numbers are non-zero, "TRUE" / "FALSE" text counts, other text is nil.
+    static func bool(of v: Value) -> Bool? {
+        switch v {
+        case .bool(let b): return b
+        case .number(let d): return d != 0
+        case .empty: return false
+        case .text(let s): return s.uppercased() == "TRUE" ? true : (s.uppercased() == "FALSE" ? false : nil)
+        case .error: return nil
+        }
+    }
+
+    private static func firstError(_ vs: [Value]) -> Value? { vs.first { if case .error = $0 { return true } else { return false } } }
+
+    private static func call(_ name: String, _ args: [Arg]) throws -> Value {
+        func nums() -> (values: [Double], error: Value?) { numbers(args) }
+        func arg(_ i: Int) -> Value? {
+            guard i < args.count else { return nil }
+            switch args[i] { case .value(let v): return v; case .cells(let vs): return vs.first ?? .empty }
+        }
+        func num(_ i: Int) -> Value { // one numeric argument, or the error that explains why not
+            guard let v = arg(i) else { return .error("#VALUE!") }
+            if case .error = v { return v }
+            return number(of: v).map { .number($0) } ?? .error("#VALUE!")
+        }
+        func text(_ i: Int) -> String? { arg(i).map { Formula.text(of: $0) } }
+        func math(_ f: ([Double]) -> Double) -> Value {
+            let (xs, e) = nums()
+            if let e { return e }
+            let r = f(xs)
+            return r.isFinite ? .number(r) : .error("#NUM!")
+        }
+        func round(_ mode: FloatingPointRoundingRule) -> Value {
+            guard case .number(let x) = num(0) else { return num(0) }
+            let digits = args.count > 1 ? num(1) : .number(0)
+            guard case .number(let n) = digits else { return digits }
+            let p = pow(10, Double(Int(n)))
+            return .number((x * p).rounded(mode) / p)
+        }
+
+        switch name {
+        case "SUM": return math { $0.reduce(0, +) }
+        case "PRODUCT": return math { $0.reduce(1, *) }
+        case "AVERAGE":
+            let (xs, e) = nums()
+            if let e { return e }
+            return xs.isEmpty ? .error("#DIV/0!") : .number(xs.reduce(0, +) / Double(xs.count))
+        case "MIN": return math { $0.min() ?? 0 }
+        case "MAX": return math { $0.max() ?? 0 }
+        case "COUNT":
+            // direct arguments count when they read as numbers; cells only when they hold numbers
+            var n = 0
+            for a in args {
+                switch a {
+                case .value(let v): if case .number = v { n += 1 } else if case .text(let s) = v, ColumnType.number(s) != nil { n += 1 }
+                case .cells(let vs): n += vs.filter { if case .number = $0 { return true } else { return false } }.count
+                }
+            }
+            return .number(Double(n))
+        case "COUNTA": return .number(Double(flatten(args).filter { $0 != .empty }.count))
+        case "COUNTBLANK": return .number(Double(flatten(args).filter { $0 == .empty || $0 == .text("") }.count))
+        case "ABS": if case .number(let x) = num(0) { return .number(abs(x)) } else { return num(0) }
+        case "INT": if case .number(let x) = num(0) { return .number(x.rounded(.down)) } else { return num(0) }
+        case "SQRT":
+            guard case .number(let x) = num(0) else { return num(0) }
+            return x < 0 ? .error("#NUM!") : .number(x.squareRoot())
+        case "MOD":
+            guard case .number(let a) = num(0) else { return num(0) }
+            guard case .number(let b) = num(1) else { return num(1) }
+            return b == 0 ? .error("#DIV/0!") : .number(a - b * (a / b).rounded(.down)) // sign follows the divisor, as in Excel
+        case "POWER":
+            guard case .number(let a) = num(0) else { return num(0) }
+            guard case .number(let b) = num(1) else { return num(1) }
+            let r = pow(a, b)
+            return r.isFinite ? .number(r) : .error("#NUM!")
+        case "ROUND": return round(.toNearestOrAwayFromZero)
+        case "ROUNDUP": return round(.awayFromZero)
+        case "ROUNDDOWN": return round(.towardZero)
+        case "IF":
+            guard let c = arg(0) else { throw Unsupported(what: "IF()") }
+            if case .error = c { return c }
+            guard let b = bool(of: c) else { return .error("#VALUE!") }
+            return b ? (arg(1) ?? .bool(true)) : (arg(2) ?? .bool(false))
+        case "IFERROR":
+            guard let v = arg(0) else { throw Unsupported(what: "IFERROR()") }
+            if case .error = v { return arg(1) ?? .empty }
+            return v
+        case "AND", "OR":
+            let vs = flatten(args)
+            if let e = firstError(vs) { return e }
+            var bools: [Bool] = []
+            for v in vs {
+                switch v {
+                case .bool(let b): bools.append(b)
+                case .number(let d): bools.append(d != 0)
+                case .text(let s): if let b = bool(of: .text(s)) { bools.append(b) } // other text in ranges is ignored
+                default: break
+                }
+            }
+            guard !bools.isEmpty else { return .error("#VALUE!") }
+            return .bool(name == "AND" ? bools.allSatisfy { $0 } : bools.contains(true))
+        case "NOT":
+            guard let v = arg(0) else { throw Unsupported(what: "NOT()") }
+            if case .error = v { return v }
+            guard let b = bool(of: v) else { return .error("#VALUE!") }
+            return .bool(!b)
+        case "TRUE": return .bool(true)
+        case "FALSE": return .bool(false)
+        case "LEN": return text(0).map { .number(Double($0.count)) } ?? .error("#VALUE!")
+        case "UPPER": return text(0).map { .text($0.uppercased()) } ?? .error("#VALUE!")
+        case "LOWER": return text(0).map { .text($0.lowercased()) } ?? .error("#VALUE!")
+        case "TRIM":
+            guard let t = text(0) else { return .error("#VALUE!") }
+            return .text(t.split(separator: " ", omittingEmptySubsequences: true).joined(separator: " "))
+        case "LEFT", "RIGHT":
+            guard let t = text(0) else { return .error("#VALUE!") }
+            let count = args.count > 1 ? num(1) : .number(1)
+            guard case .number(let n) = count else { return count }
+            guard n >= 0 else { return .error("#VALUE!") }
+            return .text(name == "LEFT" ? String(t.prefix(Int(n))) : String(t.suffix(Int(n))))
+        case "MID":
+            guard let t = text(0) else { return .error("#VALUE!") }
+            guard case .number(let start) = num(1) else { return num(1) }
+            guard case .number(let n) = num(2) else { return num(2) }
+            guard start >= 1, n >= 0 else { return .error("#VALUE!") }
+            return .text(String(t.dropFirst(Int(start) - 1).prefix(Int(n))))
+        case "CONCAT", "CONCATENATE":
+            let vs = flatten(args)
+            if let e = firstError(vs) { return e }
+            return .text(vs.map(Formula.text(of:)).joined())
+        case "TEXT":
+            guard let v = arg(0), let fmt = text(1) else { return .error("#VALUE!") }
+            if case .error = v { return v }
+            guard let d = number(of: v) else { return .text(Formula.text(of: v)) }
+            return .text(Workbook.spell(number: d, format: Workbook.Styles.parse(fmt), spelling: Workbook.Spelling(date1904: false)))
+        case "VALUE":
+            guard let v = arg(0) else { return .error("#VALUE!") }
+            if case .error = v { return v }
+            return number(of: v).map { .number($0) } ?? .error("#VALUE!")
+        case "ISBLANK": return .bool(arg(0) == .empty)
+        case "ISNUMBER": if case .number? = arg(0) { return .bool(true) } else { return .bool(false) }
+        case "ISTEXT": if case .text? = arg(0) { return .bool(true) } else { return .bool(false) }
+        case "ISERROR": if case .error? = arg(0) { return .bool(true) } else { return .bool(false) }
+        default: throw Unsupported(what: name)
         }
     }
 

@@ -98,7 +98,7 @@ import Testing
     }
 
     @Test func unsupportedIsNil() {
-        #expect(evaluate("SUM(A1:B1)") == nil)
+        #expect(evaluate("VLOOKUP(A1,B1:C2,2)") == nil)
         #expect(evaluate("A1:B1") == nil)
         #expect(evaluate("FOO") == nil)
         #expect(evaluate("1+") == nil)
@@ -117,5 +117,100 @@ import Testing
         #expect(Formula.text(of: .bool(false)) == "FALSE")
         #expect(Formula.number(of: .text(" 1,234 ")) == 1234)
         #expect(Formula.number(of: .text("abc")) == nil)
+    }
+}
+
+@Suite struct FormulaFunctionTests {
+    private let cells: MockCells = {
+        var c = MockCells()
+        // A1:C3 — numbers, text and a boolean mixed in, one empty cell
+        c.cells = ["A1": .number(1), "B1": .number(2), "C1": .text("x"),
+                   "A2": .number(3), "B2": .text("4"), "C2": .bool(true),
+                   "A3": .number(5), "B3": .empty, "C3": .number(-2),
+                   "D1": .error("#DIV/0!"), "E1": .text("  a   b  ")]
+        return c
+    }()
+    private func evaluate(_ s: String) -> Formula.Value? { Formula.evaluate(s, cells: cells) }
+
+    @Test func aggregates() {
+        #expect(evaluate("SUM(A1:C3)") == .number(9))          // text / bool / empty cells are skipped
+        #expect(evaluate("SUM(A1:A3, \"10\", TRUE)") == .number(20)) // direct arguments coerce
+        #expect(evaluate("SUM(1;2;3)") == .number(6))            // `;` separators (some locales)
+        #expect(evaluate("AVERAGE(A1:A3)") == .number(3))
+        #expect(evaluate("AVERAGE(B3)") == .error("#DIV/0!"))
+        #expect(evaluate("COUNT(A1:C3)") == .number(5))
+        #expect(evaluate("COUNT(1, \"2\", \"x\")") == .number(2))
+        #expect(evaluate("COUNTA(A1:C3)") == .number(8))
+        #expect(evaluate("COUNTBLANK(A1:C3)") == .number(1))
+        #expect(evaluate("MIN(A1:C3)") == .number(-2))
+        #expect(evaluate("MAX(A1:C3)") == .number(5))
+        #expect(evaluate("PRODUCT(A1:A3)") == .number(15))
+        #expect(evaluate("SUM(A1:C3, D1)") == .error("#DIV/0!"))   // errors propagate
+        #expect(evaluate("SUM(\"x\")") == .error("#VALUE!"))
+    }
+
+    @Test func mathAndRounding() {
+        #expect(evaluate("ABS(C3)") == .number(2))
+        #expect(evaluate("INT(-1.5)") == .number(-2))
+        #expect(evaluate("SQRT(16)") == .number(4))
+        #expect(evaluate("SQRT(-1)") == .error("#NUM!"))
+        #expect(evaluate("MOD(-7, 3)") == .number(2))              // sign of the divisor, like Excel
+        #expect(evaluate("MOD(7, 0)") == .error("#DIV/0!"))
+        #expect(evaluate("POWER(2, 10)") == .number(1024))
+        #expect(evaluate("ROUND(2.5)") == .number(3))              // half away from zero
+        #expect(evaluate("ROUND(-2.5)") == .number(-3))
+        #expect(evaluate("ROUND(1234.5678, 2)") == .number(1234.57))
+        #expect(evaluate("ROUND(1234.5678, -2)") == .number(1200))
+        #expect(evaluate("ROUNDUP(1.21, 1)") == .number(1.3))
+        #expect(evaluate("ROUNDDOWN(-1.29, 1)") == .number(-1.2))
+    }
+
+    @Test func logic() {
+        #expect(evaluate("IF(A1<B1, \"yes\", \"no\")") == .text("yes"))
+        #expect(evaluate("IF(0, 1)") == .bool(false))               // the missing else is FALSE
+        #expect(evaluate("IF(\"x\", 1, 2)") == .error("#VALUE!"))
+        #expect(evaluate("IF(D1, 1, 2)") == .error("#DIV/0!"))
+        #expect(evaluate("IF(B1=0, \"n/a\", A1/B1)") == .number(0.5))
+        #expect(evaluate("IFERROR(1/0, \"-\")") == .text("-"))
+        #expect(evaluate("IFERROR(A1, \"-\")") == .number(1))
+        #expect(evaluate("AND(TRUE, 1, A1<B1)") == .bool(true))
+        #expect(evaluate("AND(A1:B1, 0)") == .bool(false))
+        #expect(evaluate("OR(FALSE, A1>B1, C2)") == .bool(true))    // C2 is TRUE
+        #expect(evaluate("OR(\"x\")") == .error("#VALUE!"))
+        #expect(evaluate("NOT(A1=1)") == .bool(false))
+        #expect(evaluate("TRUE()") == .bool(true))
+        #expect(evaluate("ISBLANK(B3)") == .bool(true))
+        #expect(evaluate("ISNUMBER(B2)") == .bool(false))           // "4" is text
+        #expect(evaluate("ISTEXT(B2)") == .bool(true))
+        #expect(evaluate("ISERROR(D1)") == .bool(true))
+    }
+
+    @Test func text() {
+        #expect(evaluate("LEN(\"héllo\")") == .number(5))
+        #expect(evaluate("LEN(A1)") == .number(1))
+        #expect(evaluate("UPPER(\"aé\")") == .text("AÉ"))
+        #expect(evaluate("LOWER(\"ÀB\")") == .text("àb"))
+        #expect(evaluate("TRIM(E1)") == .text("a b"))
+        #expect(evaluate("LEFT(\"abc\")") == .text("a"))
+        #expect(evaluate("LEFT(\"abc\", 2)") == .text("ab"))
+        #expect(evaluate("RIGHT(\"abc\", 5)") == .text("abc"))
+        #expect(evaluate("MID(\"abcdef\", 2, 3)") == .text("bcd"))
+        #expect(evaluate("MID(\"abc\", 0, 1)") == .error("#VALUE!"))
+        #expect(evaluate("CONCAT(A1:B1, \"-\", C2)") == .text("12-TRUE"))
+        #expect(evaluate("CONCATENATE(\"a\", 1.5)") == .text("a1.5"))
+        #expect(evaluate("TEXT(18000, \"#,##0\")") == .text("18,000"))
+        #expect(evaluate("TEXT(0.125, \"0.0%\")") == .text("12.5%"))
+        #expect(evaluate("TEXT(45000, \"yyyy-mm-dd\")") == .text("2023-03-15"))
+        #expect(evaluate("TEXT(\"x\", \"0\")") == .text("x"))
+        #expect(evaluate("VALUE(\"1,234\")") == .number(1234))
+        #expect(evaluate("VALUE(\"abc\")") == .error("#VALUE!"))
+    }
+
+    @Test func nestingAndCase() {
+        #expect(evaluate("sum(Round(a1*10/3, 0), max(A2:A3))") == .number(8))
+        #expect(evaluate("SUM()") == .number(0))
+        #expect(evaluate("SUM(A1:A3") == nil)                        // unbalanced
+        #expect(evaluate("SUM(A1:A3)+A1:A3") == nil)                  // a range outside a function
+        #expect(evaluate("IF(TRUE, 1, VLOOKUP(1,A1:B2,2))") == nil)  // an unsupported branch still fails the formula
     }
 }
