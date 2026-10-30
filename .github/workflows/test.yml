@@ -1,0 +1,16 @@
+name: test
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Swift version
+        run: swift --version
+      - name: Test
+        run: |
+          plugins="$(dirname "$(dirname "$(xcrun -f swift)")")/lib/swift/host/plugins/testing"
+          swift test -Xswiftc -plugin-path -Xswiftc "$plugins"

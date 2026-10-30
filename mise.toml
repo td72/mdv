@@ -68,6 +68,15 @@ export VIW_SNAPSHOT="${usage_out}"
 echo "wrote ${usage_out}"
 '''
 
+[tasks.test]
+description = "Run the logic tests (swift-testing); the plugin path makes it work with the Command Line Tools too"
+alias = "t"
+run = """
+set -euo pipefail
+plugins="$(dirname "$(dirname "$(xcrun -f swift)")")/lib/swift/host/plugins/testing"
+swift test -Xswiftc -plugin-path -Xswiftc "$plugins" "$@"
+"""
+
 [tasks.clean]
 description = "Remove build artifacts"
 run = "rm -rf .build build"
