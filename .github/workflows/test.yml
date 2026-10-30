@@ -9,7 +9,21 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Swift version
-        run: swift --version
+        id: swift
+        run: |
+          swift --version
+          echo "version=$(swift --version 2>&1 | head -1 | tr -d ' ')" >> "$GITHUB_OUTPUT"
+      # The dependency checkouts (CodeEditLanguages is a 3 GB clone whose download has failed mid-way)
+      # plus the binary artifacts and workspace-state are enough for SwiftPM to build offline; the
+      # git mirrors under .build/repositories are not needed and are left out.
+      - name: Cache SwiftPM dependencies
+        uses: actions/cache@v6
+        with:
+          path: |
+            .build/checkouts
+            .build/artifacts
+            .build/workspace-state.json
+          key: swiftpm-${{ runner.os }}-${{ steps.swift.outputs.version }}-${{ hashFiles('Package.resolved') }}
       - name: Test
         run: |
           plugins="$(dirname "$(dirname "$(xcrun -f swift)")")/lib/swift/host/plugins/testing"
