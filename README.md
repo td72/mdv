@@ -1,3 +1,5 @@
+<img src="Resources/icon-tile-1024.png" width="96" align="right" alt="">
+
 # viw — vim-keyed viewer
 
 A small, fast, native viewer for macOS with vim keybindings. It renders GitHub Flavored Markdown, shows source
@@ -26,6 +28,7 @@ Or just `mise r app` and drag `build/viw.app` wherever you like. `swift build -c
 | Task | What |
 |------|------|
 | `mise r build` | release build |
+| `mise r icon` | build `build/viw.icns` from `Resources/icon-1024.png` (sips + iconutil) |
 | `mise r app` | assemble `build/viw.app` |
 | `mise r install` | install to `~/Applications` + `~/.local/bin/viw` |
 | `mise r run [file]` | build and open a file |

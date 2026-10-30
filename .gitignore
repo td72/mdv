@@ -7,3 +7,6 @@ build/
 # mise
 mise.local.toml
 .mise.local.toml
+
+# scratch files (icon designs etc.)
+tmp/
