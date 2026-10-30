@@ -77,7 +77,11 @@ guessed from the first lines and the encoding is UTF-8 with a Shift_JIS fallback
 `.xlsx` / `.xlsm` open in the same grid with a sheet bar underneath: click a sheet, or `]` / `[` (View › Next /
 Previous Sheet, `⌘]` / `⌘[`) to switch; the window subtitle names the sheet. viw reads the OOXML parts itself
 (no library): shared strings (rich-text runs joined, furigana `rPh` dropped), inline strings, booleans, errors and the
-cached result of formulas (nothing is recalculated). Number formats are applied in a simple form — dates and times
+cached result of formulas. The formula itself shows under the value in the detail pane and in the cell's tooltip. A file
+saved without cached values (openpyxl and other libraries write none) gets a small evaluator for the cells that need it:
+references (`B3`, `$B$3`, `Sheet2!C4`, `'売上 2026'!C4`, shared formulas), `+ - * / ^ & %`, comparisons and parentheses,
+with Excel's errors (`#DIV/0!`, `#REF!` for a circular reference, `#VALUE!`); functions are not evaluated yet, so such a
+cell stays empty with its formula in the pane. Number formats are applied in a simple form — dates and times
 (1900 and 1904 systems, `[h]` elapsed), decimals, thousands grouping, percent; `General` shows up to 10 significant
 digits and keeps integers exact; currency symbols and colors are not rendered — so the grid reads like Excel and the
 column types still infer (`1,234` and `12.5%` count as numbers). Column widths come from the sheet's `<cols>` when the
@@ -199,7 +203,7 @@ Only flat `key = value` lines are parsed (no TOML library is linked). Unknown fo
 | `Sources/viw/FileWatcher.swift` | kqueue file watcher that survives atomic saves |
 
 Debug helpers: `viw --unzip archive.zip [entry]` lists an archive's entries or writes one to stdout; `viw --xlsx book.xlsx [N | name]`
-lists a workbook's sheets or writes one as TSV.
+lists a workbook's sheets or writes one as TSV (`--formulas` appends `{=…}` to cells that have a formula).
 Environment variables (wrapped by `mise r snapshot`): `VIW_TIMING=1` prints parse / render / layout /
 highlight-query times and scroll offsets to stderr, `VIW_SNAPSHOT=out.png` renders the whole document to a PNG and exits (`VIW_SNAPSHOT_WIDTH=700`,
 `VIW_DARK=1` to vary).

@@ -458,7 +458,12 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
                 if i < data.types.count { line.append(NSAttributedString(string: " \(data.types[i].rawValue)", attributes: typeAttrs)) }
                 line.append(NSAttributedString(string: "  ", attributes: keyAttrs))
                 let valueStart = line.length
-                line.append(NSAttributedString(string: value + "\n", attributes: valueAttrs))
+                line.append(NSAttributedString(string: value, attributes: valueAttrs))
+                if let f = data.formulas[original(row)]?[i] { // xlsx: the formula under its value
+                    let note = value.isEmpty ? "=\(f)   (no cached value)" : "=\(f)"
+                    line.append(NSAttributedString(string: "\n" + note, attributes: [.font: NSFont.monospacedSystemFont(ofSize: font.pointSize * 0.85, weight: .regular), .foregroundColor: NSColor.tertiaryLabelColor]))
+                }
+                line.append(NSAttributedString(string: "\n", attributes: valueAttrs))
                 line.addAttribute(.paragraphStyle, value: style, range: NSRange(location: 0, length: line.length))
                 fieldRanges.append((NSRange(location: text.length, length: line.length),
                                     NSRange(location: text.length + valueStart, length: (value as NSString).length)))
@@ -559,7 +564,9 @@ final class TableDocumentView: NSObject, DocumentView, NSTableViewDataSource, NS
         let value = col < record.count ? record[col] : ""
         let numeric = col < data.types.count && data.types[col].isNumeric // by column, so a stray text cell does not break the alignment
         tf.stringValue = value
-        tf.toolTip = value.contains("\n") || value.count > 40 ? value : nil // the full text of a truncated cell
+        let formula = data.formulas[original(row)]?[col].map { "=" + $0 }
+        let long = value.contains("\n") || value.count > 40 ? value : nil // the full text of a truncated cell
+        tf.toolTip = [long, formula].compactMap { $0 }.joined(separator: "\n").nilIfEmpty
         tf.font = numeric ? digitFont : font
         tf.alignment = numeric ? .right : .left
         tf.textColor = .labelColor
@@ -1060,4 +1067,8 @@ final class VimTableView: NSTableView {
 
     /// Edit › Copy / ⌘C while the grid has focus.
     @objc func copy(_ sender: Any?) { commands?.copySelection() }
+}
+
+private extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
 }

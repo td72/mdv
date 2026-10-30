@@ -93,6 +93,8 @@ struct TableData {
     var types: [ColumnType] = []
     /// Column widths in characters from the file (xlsx `<cols>`), nil where the data decides.
     var columnWidths: [Double?] = []
+    /// xlsx: formula text by data-row index, then column (the grid shows the value; the pane shows both).
+    var formulas: [Int: [Int: String]] = [:]
     var columnCount: Int { header.count }
     var truncated: Bool { rows.count + 1 < totalRows }
 

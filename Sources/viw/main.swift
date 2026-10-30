@@ -211,7 +211,8 @@ if args.first == "--unzip", args.count >= 2 {
     }
 }
 
-// Debug: `viw --xlsx book.xlsx` lists the sheets, `viw --xlsx book.xlsx N` (or a sheet name) writes that sheet as TSV.
+// Debug: `viw --xlsx book.xlsx` lists the sheets, `viw --xlsx book.xlsx N` (or a sheet name) writes that sheet as TSV
+// (`--formulas` adds `{=formula}` after cells that have one).
 if args.first == "--xlsx", args.count >= 2 {
     do {
         let t0 = CFAbsoluteTimeGetCurrent()
@@ -224,8 +225,11 @@ if args.first == "--xlsx", args.count >= 2 {
                 exit(1)
             }
             let t = try wb.table(forSheet: i)
+            let withFormulas = args.contains("--formulas") // cells with a formula print as `value {=formula}`
             var out = t.header.joined(separator: "\t") + "\n"
-            for r in t.rows { out += r.joined(separator: "\t") + "\n" }
+            for (r, row) in t.rows.enumerated() {
+                out += row.enumerated().map { c, v in withFormulas ? (t.formulas[r]?[c].map { "\(v) {=\($0)}" } ?? v) : v }.joined(separator: "\t") + "\n"
+            }
             FileHandle.standardOutput.write(out.data(using: .utf8)!)
             if ProcessInfo.processInfo.environment["VIW_TIMING"] != nil {
                 FileHandle.standardError.write("xlsx: \(Int((CFAbsoluteTimeGetCurrent() - t0) * 1000)) ms (\(t.rows.count) rows × \(t.columnCount) cols)\n".data(using: .utf8)!)
