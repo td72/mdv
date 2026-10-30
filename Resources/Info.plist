@@ -8,6 +8,7 @@
     <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
     <key>CFBundleName</key><string>viw</string>
     <key>CFBundleDisplayName</key><string>viw</string>
+    <key>CFBundleIconFile</key><string>viw</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>0.2.0</string>
     <key>CFBundleVersion</key><string>1</string>

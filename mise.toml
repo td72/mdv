@@ -14,15 +14,32 @@ run = "swift build -c release"
 sources = ["Package.swift", "Package.resolved", "Sources/**/*.swift"]
 outputs = [".build/release/viw"]
 
+[tasks.icon]
+description = "Build build/viw.icns from Resources/icon-1024.png (sips + iconutil, no dependencies)"
+sources = ["Resources/icon-1024.png"]
+outputs = ["build/viw.icns"]
+run = '''
+set -euo pipefail
+set="build/viw.iconset"
+rm -rf "$set" && mkdir -p "$set"
+for s in 16 32 128 256 512; do
+  sips -z $s $s Resources/icon-1024.png --out "$set/icon_${s}x${s}.png" >/dev/null
+  sips -z $((s*2)) $((s*2)) Resources/icon-1024.png --out "$set/icon_${s}x${s}@2x.png" >/dev/null
+done
+iconutil -c icns "$set" -o build/viw.icns
+rm -rf "$set"
+'''
+
 [tasks.app]
 description = "Assemble build/viw.app from the release binary"
-depends = ["build"]
+depends = ["build", "icon"]
 run = '''
 set -euo pipefail
 rm -rf "$VIW_APP"
 mkdir -p "$VIW_APP/Contents/MacOS" "$VIW_APP/Contents/Resources"
 cp "$VIW_BIN" "$VIW_APP/Contents/MacOS/viw"
 cp Resources/Info.plist "$VIW_APP/Contents/Info.plist"
+cp build/viw.icns "$VIW_APP/Contents/Resources/viw.icns"
 # tree-sitter highlight queries (Bundle.module looks in Contents/Resources)
 cp -R .build/release/CodeEditLanguages_CodeEditLanguages.bundle "$VIW_APP/Contents/Resources/"
 codesign --force --sign - "$VIW_APP"
