@@ -35,7 +35,7 @@ enum FileKind {
     case plain        // unknown extension: one monochrome code block
 
     static let markdownExtensions: Set<String> = ["md", "markdown", "mdown", "mkd", "mkdn", "mdwn", "txt"]
-    static let imageExtensions: Set<String> = ["png", "jpg", "jpeg", "gif", "heic", "heif", "webp", "tiff", "tif", "bmp", "ico"]
+    static let imageExtensions: Set<String> = ["png", "jpg", "jpeg", "gif", "heic", "heif", "webp", "tiff", "tif", "bmp", "ico", "svg"]
     /// Recognised as video; only what AVFoundation decodes plays (the rest shows a note).
     static let videoExtensions: Set<String> = ["mp4", "m4v", "mov", "3gp", "mkv", "webm", "avi", "flv", "mpg", "mpeg"]
     static let audioExtensions: Set<String> = ["m4a", "mp3", "wav", "aac", "aiff", "aif", "caf", "flac", "ogg", "oga", "opus"]

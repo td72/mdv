@@ -177,16 +177,19 @@ final class ImageDocumentView: NSObject, DocumentView {
         } else {
             let s = original.size
             let swapped = turns % 2 == 1
-            let out = NSImage(size: swapped ? NSSize(width: s.height, height: s.width) : s)
-            out.lockFocus()
-            let t = NSAffineTransform()
-            t.translateX(by: out.size.width / 2, yBy: out.size.height / 2)
-            t.rotate(byDegrees: CGFloat(-90 * turns))
-            t.translateX(by: -s.width / 2, yBy: -s.height / 2)
-            t.concat()
-            original.draw(in: NSRect(origin: .zero, size: s))
-            out.unlockFocus()
-            image = out
+            // Drawn on demand at the destination resolution (no bitmap of the original's size),
+            // so a rotated SVG stays a vector and zooming it stays sharp.
+            let turns = turns
+            image = NSImage(size: swapped ? NSSize(width: s.height, height: s.width) : s, flipped: false) { rect in
+                let t = NSAffineTransform()
+                t.translateX(by: rect.midX, yBy: rect.midY)
+                t.rotate(byDegrees: CGFloat(-90 * turns))
+                t.scaleX(by: rect.width / (swapped ? s.height : s.width), yBy: rect.height / (swapped ? s.width : s.height))
+                t.translateX(by: -s.width / 2, yBy: -s.height / 2)
+                t.concat()
+                original.draw(in: NSRect(origin: .zero, size: s))
+                return true
+            }
         }
         imageView.image = image
         relayout()

@@ -47,7 +47,7 @@
             <key>CFBundleTypeExtensions</key>
             <array>
                 <string>png</string><string>jpg</string><string>jpeg</string><string>gif</string><string>heic</string><string>heif</string>
-                <string>webp</string><string>tiff</string><string>tif</string><string>bmp</string><string>ico</string>
+                <string>webp</string><string>tiff</string><string>tif</string><string>bmp</string><string>ico</string><string>svg</string>
             </array>
         </dict>
         <dict>
